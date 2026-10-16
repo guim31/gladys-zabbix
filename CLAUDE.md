@@ -16,8 +16,8 @@ its only runtime dependency. It started from the official JavaScript template.
 ```bash
 npm install
 npm test                                  # node --test, the built-in runner
-node --test test/devices.test.js          # one file
-node --test --test-name-pattern "plug"    # tests whose name matches
+node --test test/hub.test.js              # one file
+node --test --test-name-pattern "widget"  # tests whose name matches
 npm run lint                              # ESLint
 npm run format:check                      # Prettier, as the CI runs it
 npm run format                            # Prettier, fix in place
@@ -31,16 +31,22 @@ pushing.
 ## Architecture
 
 ```
-index.js                          SDK wiring only: handlers registered before connect()
-src/devices/index.js              registry of the device blueprints + dispatch helpers
-src/devices/<type>.js             one device type per file (buildDevice, onPoll, onSetValue...)
+index.js                          SDK wiring only: src/app.js registers the handlers before connect()
+src/app.js                        every SDK handler -> the hub (also used by the tests)
+src/hub.js                        reading timer, states (changes + heartbeat), scene events, views
+src/devices.js                    host and server devices, feature names (4 languages), values
+src/zabbix/client.js              JSON-RPC: version, token (header or body), snapshot, acknowledge
+src/zabbix/http.js                node:http/https POST (self-signed certificates on request)
 src/scenes.js                     scene action handlers (manifest `scene_actions`)
-src/widgets.js                    dashboard widget handlers (manifest `widgets`)
+src/widgets.js                    dashboard widget `problems` (manifest `widgets`)
+src/texts.js                      connection, error, report, severity texts (4 languages)
 src/config.js                     DEFAULT_CONFIG (mirrors the manifest defaults) + normalization
-src/weather.js                    example driver (Open-Meteo)
-gladys-assistant-integration.json manifest: name, config_schema, actions, image...
-docs/en.md, docs/fr.md            user documentation, re-hosted by Gladys (mandatory)
+src/store.js                      /data/zabbix-state.json (the problems already seen)
+src/logs.js                       repeated failures logged once, then once when they heal
+gladys-assistant-integration.json manifest: name, config_schema, actions, triggers, widget...
+docs/{en,fr,de,es}.md             user documentation, re-hosted by Gladys (en and fr mandatory)
 test/                             node --test, against the SDK's fake Gladys (integration-sdk/testing)
+                                  and helpers/fakeZabbix.js (real answers in test/fixtures/zabbix)
 .github/scripts/release.mjs       release helpers (manifest bump, changelog), tested in test/
 ```
 
@@ -70,8 +76,9 @@ test/                             node --test, against the SDK's fake Gladys (in
   `type: "provider"`: 5.1.0). `test/manifest.test.js` ties the manifest to the
   code (defaults, action, scene and widget handlers): change both sides
   together.
-- **User-facing text** is bilingual (English and French): action messages,
-  manifest texts, and `docs/en.md` / `docs/fr.md`, kept in sync.
+- **User-facing text** exists in English, French, German and Spanish: action
+  messages, widget texts, feature names, manifest texts, and
+  `docs/{en,fr,de,es}.md`, kept in sync (`test/i18n.test.js`).
 - **Style.** Prettier formats, ESLint catches mistakes. Comments explain why,
   in English. Tests never touch the network.
 
@@ -233,3 +240,68 @@ long, et sur un « Sie »/« Ihr… » de politesse en allemand. Le store exige 
 - Docs `en`, `fr`, `de`, `es` avec les mêmes sections.
 - Chauffe, ouverture, sécurité : ne rien rendre pilotable « comme un thermostat » ou par un assistant
   vocal quand une erreur serait dangereuse (leçon d'OctoPrint).
+
+## Zabbix (propre à ce dépôt)
+
+- **API** : JSON-RPC sur `<frontend>/api_jsonrpc.php`, jeton d'API seulement (Zabbix ≥ 5.4 ; pas de
+  `user.login`, pas de mot de passe stocké). **`apiinfo.version` doit être appelé sans jeton** : avec
+  l'en-tête ou `auth`, Zabbix 7.0 répond `-32602 … must be called without authorization header`
+  (fixture `version_with_token`). Jeton dans l'en-tête `Authorization: Bearer` **à partir de 6.4**,
+  dans le membre `auth` du corps avant (déprécié en 6.4, retiré en 7.2) : la 7.0 accepte encore les
+  deux. Version relue toutes les heures et après chaque erreur.
+- **Jeton refusé, expiré ou absent** : `-32602 Invalid params. / Not authorized.` en HTTP 200,
+  identique dans les trois cas (fixtures `bad_token`, `no_token`).
+- **`active_available`** (agents actifs) est demandé en **7.0+** seulement : la 6.x valide les
+  champs de `output` et refuserait la requête (il existe peut-être dès la 6.4 : non vérifié, donc
+  pas demandé). Disponibilité d'un hôte : 0 si une interface ou l'agent actif
+  est indisponible (`2`), 1 si l'un est disponible, rien sinon (hôte sans interface, trappeur).
+  L'agent 2 en 7.0 renseigne `active_available: 1` même avec une interface passive.
+- **Problèmes** : `problem.get` (`suppressed: false`, comme les tableaux de bord) ne donne pas
+  l'hôte : il vient de `trigger.get` (`selectHosts`, `monitored: true`, qui écarte les déclencheurs
+  désactivés). Un `event.acknowledge` sur un problème **déjà acquitté est accepté** en 7.0
+  (fixture `acknowledge_again`) ; l'intégration n'envoie que les non acquittés. Action `6` =
+  acquitter (2) + message (4), mêmes valeurs de 5.4 à 7.x.
+- **Groupes d'hôtes** : `hostgroup.get` `filter.name` compare **exactement** (casse comprise sous
+  PostgreSQL). Aucun groupe trouvé = erreur de configuration ; certains seulement = avertissement et
+  ligne dans « Tester la connexion ».
+- **Événements de scène** : premier passage (ou nouveau périmètre : adresse, groupes ou jeton,
+  haché) enregistré sans annonce ; ensuite un nouvel `eventid` = `problem_started`, un `eventid`
+  disparu = `problem_resolved` (aussi quand le problème sort du périmètre). Un problème n'est marqué
+  « annoncé » qu'**après acceptation par Gladys** (Gladys qui redémarre, plafond de 30 par lecture :
+  le reste part aux lectures suivantes), et sa fin n'est annoncée que si son début l'a été. Les
+  problèmes **supprimés** par une maintenance sont lus avec leur drapeau (pas de `suppressed: false`
+  dans la requête) : ni comptés ni annoncés, mais pas pris pour résolus ; annoncés à la fin de la
+  maintenance s'ils sont nés pendant. Le filtre `severity` est un `multi_select` de valeurs
+  `"0"`…`"5"` : l'événement porte le nombre, le cœur le convertit en texte pour le filtre et le garde
+  en nombre pour la variable du même nom.
+- **Lectures concurrentes** : une lecture lancée avant une reconfiguration (génération) ou un
+  acquittement (`fresh`) est suivie d'une nouvelle lecture, sinon elle amorcerait le nouveau
+  périmètre avec les problèmes de l'ancien (relecture indépendante du 16/10/2026).
+- **Sévérité la plus haute** (`risk/integer`) : échelle de Zabbix 0…5, **-1 sans problème** (bornes
+  -1/5). Noms des sévérités repris de l'interface de Zabbix dans chaque langue.
+- **Éléments** : identifiant de fonctionnalité = `item_` + 12 hex du SHA-1 de la clé (une clé porte
+  crochets, virgules, barres). `%` → `level-sensor/liquid-level-percent` 0-100, le reste
+  `unknown/unknown` sans unité ; seuls les types numériques (0, 3) sont gardés.
+- **Journaux** : un problème qui apparaît ou se résout est en debug (une panne réseau en lève des
+  dizaines) ; l'info garde le démarrage, la version, la perte et le retour de Zabbix, une ligne par
+  acquittement.
+
+## Vérifié sur un vrai Zabbix (16/10/2026)
+
+Image Docker de l'intégration avec les contraintes du bac à sable (`--cap-drop ALL --security-opt
+no-new-privileges --read-only --memory 256m --pids-limit 256`, volume `/data`, réseau en pont
+`gladys-test-zabbix`, aucun port publié) contre les images officielles `zabbix-server-pgsql` et
+`zabbix-web-nginx-pgsql` **7.0.31** et **6.0.48** (PostgreSQL 16), un hôte agent 2 (modèle _Linux by
+Zabbix agent_), un hôte dont l'agent refuse le serveur (6.0 : disponible à 0) et un hôte trappeur
+alimenté par `zabbix_sender`.
+
+- Sans Gladys : reconnexion du SDK en backoff, pas de plantage, aucun secret dans les logs, ~19 Mo
+  au repos, arrêt propre sur SIGTERM (code 0).
+- Faux Gladys du SDK dans le conteneur verrouillé : découverte, états, problème résolu puis relevé
+  (événements avec durée), acquittement avec message (relu aussitôt : « ✓ », compteur à 0),
+  widget, « Tester la connexion » ; jeton refusé (`auth`), chemin sans API (`not_zabbix`, 404 de
+  nginx), frontend arrêté (`unreachable`, un seul `server_unreachable`) ; redémarrage sans doublon.
+- 6.0 : jeton dans le corps, adresse d'une page du frontend (`zabbix.php?action=…`) acceptée.
+- Piège de mise en place : sur la 6.0 avec 256 Mo, `host.create` avec un modèle lié peut dépasser
+  le délai du client HTTP ; une nouvelle tentative trop tôt donne `DBEXECUTE_ERROR` (clé `ids`
+  déjà prise), la création ayant abouti entre-temps.

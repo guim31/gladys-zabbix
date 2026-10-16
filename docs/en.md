@@ -1,61 +1,173 @@
-# Demo Devices Template
+# Zabbix
 
-This is the user documentation of the integration. Gladys re-hosts this file
-and shows a permanent **Documentation** link to it in the Configuration screen
-(in the user's language, with English as the fallback) — it is when
-configuring that the user needs it most. Keep the short onboarding hints in
-the `section` blocks of the manifest `config_schema`; put the long
-step-by-step (screenshots, troubleshooting…) here.
+Bring your [Zabbix](https://www.zabbix.com/) monitoring into Gladys: each host
+becomes a device (available, active problems, highest severity, maintenance),
+a "Zabbix server" device counts the problems by severity, and your scenes
+react when a problem starts or is resolved — a red light for a disaster, a
+message for a failing disk. A scene can also acknowledge the problems of a
+host, and a dashboard widget lists the problems in progress.
 
-## What you get
+The integration reads the Zabbix API on your local network, with an API
+token. Nothing goes through a cloud.
 
-Six demo devices show up after installation: a weather station (real data
-from Open-Meteo), a switch, a dimmable light, a smart plug with power
-metering, a motion sensor and a camera.
+Tested against a real Zabbix 7.0 LTS and 6.0 LTS (official Docker images,
+agent 2 and trapper items); Zabbix 5.4 and 6.4 only through their documented
+API differences. Feedback welcome:
+[github.com/guim31/gladys-zabbix/issues](https://github.com/guim31/gladys-zabbix/issues).
 
-## Configuration
+## What you need
 
-1. Open the **Configuration** tab of the integration.
-2. Set the **latitude** and **longitude** the demo weather station should
-   observe (they default to Paris), and pick your temperature unit.
-   The **refresh interval** sets how often the weather station and the
-   plug's power are read: every 5 minutes by default, every minute at most.
-3. Save: the devices appear in the **Discovery** tab, ready to be added.
+- Gladys Assistant 5.1.0 or later.
+- Zabbix 5.4 or later (API tokens), 6.0 LTS and 7.0 LTS included, reachable
+  from the Gladys machine (the address of its web frontend).
+- A Zabbix user for Gladys. A read-only role on the host groups to follow is
+  enough; add the right to acknowledge problems for the scene action.
 
-The **Prefer the local connection** toggle drives the demo plug: it reports
-the channel it actually uses as a badge (local or cloud), with an orange dot
-when it runs degraded (local refused, cloud fallback).
+## Getting started
 
-## Actions
+### 1. Create an API token
 
-- **Test the weather provider** — performs a live request to Open-Meteo and
-  shows the current temperature and humidity under the button.
-- **Identify a device** — pick one of your devices in the list and it will
-  signal itself (the demo light "blinks" in the logs).
+In Zabbix, open **Users → API tokens** (6.4 and later; **Administration →
+General → API tokens** from 5.4 to 6.2), click **Create API token**, choose the user, untick
+"Set expiration date" or choose a far date, and copy the token: Zabbix shows
+it only once.
 
-## Scenes
+### 2. Configure the integration
 
-The integration adds its own cards to the scene editor (Gladys 5.1 or
-later), under the **Integrations** category:
+In Gladys, open the configuration of the integration:
 
-- **Motion detected** (trigger) — starts the scene when a demo motion sensor
-  sees something move. Optionally pick the sensor and what moved (person,
-  animal); left empty, any detection matches. The following actions can
-  read what moved with `{{triggerEvent.data.target}}`.
-- **Identify a device** (action) — makes the chosen device signal itself.
-  It returns whether the device could signal itself, so the following
-  actions can depend on it.
+- **Zabbix address**: the address you open the Zabbix frontend with, e.g.
+  `http://192.168.1.2/zabbix` or `https://zabbix.example.com`. The URL of a
+  frontend page copied from the browser works too.
+- **API token**: the token of step 1.
+- **Host groups (optional)**: names separated by commas, exactly as in Zabbix
+  (case included). Empty: every monitored host the token can see.
+- **Item keys (optional)**: up to 5 numeric item keys, e.g.
+  `system.cpu.util, vm.memory.utilization, vfs.fs.size[/,pused]`. Each host
+  that has one of these items gets a feature with its last value.
+- **Refresh interval**: 15 seconds to 5 minutes (30 seconds by default).
+- **Allow acknowledging from scenes**: untick to turn the acknowledgement
+  action off.
+- **Accept self-signed certificates**: for an `https://` address whose
+  certificate your browser does not trust either.
+- **Language of the names**: language of the feature names and of the scene
+  results.
+
+Save, then click **Test the connection**: it shows the Zabbix version, the
+number of hosts and of active problems.
+
+### 3. Add the devices
+
+Open the **Discover** tab of the integration and add the hosts to follow, and
+the "Zabbix server" device if you want the counts by severity. The scene
+triggers work for every host, added to Gladys or not.
+
+## The devices
+
+Each **host** (monitored hosts only; disabled ones are left out):
+
+| Feature          | Value                                                                                    |
+| ---------------- | ---------------------------------------------------------------------------------------- |
+| Available        | 1 available, 0 unavailable (an interface, or the active agent on 7.0+)                   |
+| Active problems  | number of active problems (suppressed ones left out)                                     |
+| Highest severity | 0 Not classified, 1 Information, 2 Warning, 3 Average, 4 High, 5 Disaster, -1 no problem |
+| In maintenance   | 1 while the host is in a Zabbix maintenance                                              |
+| Items            | one feature per configured item key found on the host, named after it                    |
+
+"Available" stays empty for a host without interface (trapper items only),
+whose availability Zabbix does not know.
+
+The **Zabbix server** device:
+
+- Active problems
+- Not classified problems
+- Information problems
+- Warning problems
+- Average problems
+- High problems
+- Disaster problems
+
+Values are sent to Gladys only when they change, and every 6 hours otherwise.
 
 ## Dashboard
 
-Add the **Demo status** widget to a dashboard: it shows the live
-temperature of the weather station and the power of the office plug, the
-connection the plug currently uses (orange when degraded) and the observed
-location. Its **Identify the light** button makes the demo light signal
-itself.
+The **Zabbix problems** widget shows three tiles — the active problems, the
+ones not acknowledged yet, the hosts unavailable — and the problems, the most
+severe first: the problem, its host (✓ once acknowledged), and an icon and
+colour for its severity. Ten rows at most. **Refresh** reads Zabbix again. In
+its settings, choose hosts to show only theirs (empty: every host).
+
+## Scenes
+
+### Triggers
+
+- **A problem starts**: a new problem on a host. Filters: hosts (empty: any),
+  severities (empty: any; for "High or above", choose High and Disaster).
+  Variables: host name, problem, severity, severity level (0 to 5), Zabbix
+  event id.
+- **A problem is resolved**: a problem is resolved or closed, with the same
+  filters and variables, plus its duration in minutes.
+- **Zabbix no longer answers**: the API fails to answer twice in a row
+  (variables: Zabbix address, error).
+
+The problems already there when the integration starts are not announced. A
+problem that starts or ends while Gladys or the integration restarts is
+announced once at the next read. Problems suppressed by a maintenance are left
+out, as in the Zabbix dashboards: neither counted nor announced while
+suppressed, and not taken for resolved; one that started during the
+maintenance is announced when it ends.
+
+### Actions
+
+- **Acknowledge the problems of a host**: acknowledges the active problems of
+  the host in Zabbix, with a message in their history (empty: "Acknowledged
+  from Gladys"). Returns the number acknowledged. Turn it off with "Allow
+  acknowledging from scenes".
+- **Read the problems**: counts and lists the active problems of one host, or
+  of all, for the next actions: number, not acknowledged, highest severity (in
+  words and as a level), and the list "host: problem".
+
+### Scene ideas
+
+- **A red light for serious problems**: trigger "A problem starts", severities
+  High and Disaster → turn the living-room lamp red and send
+  `{{triggerEvent.data.host}}: {{triggerEvent.data.problem}}`.
+- **Back to normal**: trigger "A problem is resolved", same filters → message
+  "Resolved after {{triggerEvent.data.duration_minutes}} min".
+- **Morning report**: every day at 8:00, "Read the problems" → send the count
+  and the list when the count is above 0.
+- **Seen from the couch**: a dashboard button or a Zigbee remote runs
+  "Acknowledge the problems of a host" on the NAS.
 
 ## Troubleshooting
 
-The integration logs everything it does: check the integration logs from the
-Gladys UI (or `docker logs` on the host) with `LOG_LEVEL=debug` for the full
-detail.
+- **"API token refused or expired"**: check the token in Users → API tokens
+  (enabled, not expired), and that its user is enabled.
+- **"Zabbix does not answer"**: check the address from the Gladys machine.
+  `localhost` is the integration container itself: use the IP address of the
+  Zabbix machine.
+- **"No Zabbix API at this address"**: the address does not lead to the
+  frontend; `api_jsonrpc.php` must be next to its pages.
+- **"Certificate refused"**: tick "Accept self-signed certificates", or use
+  the `http://` address on the local network.
+- **"No host group with these names"**: the names must match Zabbix exactly.
+  The report of "Test the connection" lists the unknown ones.
+- **A host is missing**: it is disabled, outside the host groups, or the user
+  of the token has no read permission on it.
+- **The acknowledgement is refused**: the role of the user needs "Acknowledge
+  problems", and write or read permission on the host group.
+
+## Limits
+
+- One Zabbix server per integration.
+- Problems of triggers only (no internal events, no services). Suppressed
+  problems are left out.
+- "A problem is resolved" also fires when a problem leaves the scope: a host
+  removed from the host groups, a trigger disabled.
+- At most 30 problem events per read: a network outage can raise dozens at
+  once; the rest follows at the next reads.
+- Item features hold numbers only; a percentage shows as a level from 0 to
+  100, other units without unit.
+- No quota on the Zabbix API: each read sends two to six requests.
+
+Not affiliated with Zabbix SIA. Zabbix is a trademark of Zabbix SIA.

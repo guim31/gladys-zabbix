@@ -1,67 +1,189 @@
-# Template de démonstration
+# Zabbix
 
-Ceci est la documentation utilisateur de l'intégration. Gladys ré-héberge ce
-fichier et affiche un lien **Documentation** permanent vers lui dans l'écran
-de configuration (dans la langue de l'utilisateur, avec l'anglais en repli) —
-c'est au moment de configurer que l'utilisateur en a le plus besoin. Gardez
-les courtes indications d'accueil dans les blocs `section` du `config_schema`
-du manifest ; mettez ici le pas-à-pas détaillé (captures d'écran, dépannage…).
+Votre supervision [Zabbix](https://www.zabbix.com/) dans Gladys : chaque hôte
+devient un appareil (disponible, problèmes actifs, sévérité la plus haute,
+maintenance), un appareil « Serveur Zabbix » compte les problèmes par
+sévérité, et vos scènes réagissent quand un problème apparaît ou se résout :
+une lumière rouge pour un désastre, un message pour un disque qui lâche. Une
+scène peut aussi acquitter les problèmes d'un hôte, et un widget du tableau de
+bord liste les problèmes en cours.
 
-## Ce que vous obtenez
+L'intégration lit l'API de Zabbix sur votre réseau local, avec un jeton d'API.
+Rien ne passe par un cloud.
 
-Six appareils de démonstration apparaissent après l'installation : une
-station météo (vraies données Open-Meteo), un interrupteur, une lampe
-variable, une prise connectée avec mesure de puissance, un détecteur de
-mouvement et une caméra.
+Testée contre un vrai Zabbix 7.0 LTS et 6.0 LTS (images Docker officielles,
+agent 2 et éléments trappeur) ; Zabbix 5.4 et 6.4 seulement d'après les
+différences documentées de leur API. Vos retours sont les bienvenus :
+[github.com/guim31/gladys-zabbix/issues](https://github.com/guim31/gladys-zabbix/issues).
 
-## Configuration
+## Ce qu'il faut
 
-1. Ouvrez l'onglet **Configuration** de l'intégration.
-2. Renseignez la **latitude** et la **longitude** que la station météo de
-   démonstration doit observer (Paris par défaut), et choisissez votre unité
-   de température. L'**intervalle de rafraîchissement** règle la fréquence
-   de lecture de la station météo et de la puissance de la prise : toutes
-   les 5 minutes par défaut, toutes les minutes au plus.
-3. Enregistrez : les appareils apparaissent dans l'onglet **Découverte**,
-   prêts à être ajoutés.
+- Gladys Assistant 5.1.0 ou plus récent.
+- Zabbix 5.4 ou plus récent (jetons d'API), 6.0 LTS et 7.0 LTS compris,
+  joignable depuis la machine de Gladys (l'adresse de son interface web).
+- Un utilisateur Zabbix pour Gladys. Un rôle en lecture seule sur les groupes
+  d'hôtes à suivre suffit ; ajoutez le droit d'acquitter les problèmes pour
+  l'action de scène.
 
-Le réglage **Préférer la connexion locale** pilote la prise de
-démonstration : elle affiche en badge le canal réellement utilisé (local ou
-cloud), avec un point orange quand elle fonctionne en mode dégradé (local
-refusé, bascule cloud).
+## Mise en route
 
-## Actions
+### 1. Créer un jeton d'API
 
-- **Tester le fournisseur météo** — effectue une requête en direct vers
-  Open-Meteo et affiche la température et l'humidité actuelles sous le
-  bouton.
-- **Identifier un appareil** — choisissez un de vos appareils dans la liste
-  et il se signale (la lampe de démonstration « clignote » dans les logs).
+Dans Zabbix, ouvrez **Utilisateurs → Jetons API** (6.4 et plus récent ;
+**Administration → Général → Jetons API** de la 5.4 à la 6.2), cliquez sur
+**Créer un jeton API**, choisissez l'utilisateur, décochez « Définir une date
+d'expiration » ou choisissez une date lointaine, et copiez le jeton : Zabbix
+ne l'affiche qu'une fois.
 
-## Scènes
+### 2. Configurer l'intégration
 
-L'intégration ajoute ses propres cartes à l'éditeur de scènes (Gladys 5.1
-ou plus récent), dans la catégorie **Intégrations** :
+Dans Gladys, ouvrez la configuration de l'intégration :
 
-- **Mouvement détecté** (déclencheur) — lance la scène quand un détecteur
-  de démonstration voit bouger quelque chose. Choisissez éventuellement le
-  détecteur et ce qui a bougé (personne, animal) ; laissés vides, toute
-  détection correspond. Les actions suivantes peuvent lire ce qui a bougé
-  avec `{{triggerEvent.data.target}}`.
-- **Identifier un appareil** (action) — fait se signaler l'appareil choisi.
-  Elle indique si l'appareil a pu se signaler, pour que les actions
-  suivantes puissent en dépendre.
+- **Adresse de Zabbix** : l'adresse avec laquelle vous ouvrez l'interface de
+  Zabbix, par exemple `http://192.168.1.2/zabbix` ou
+  `https://zabbix.example.com`. L'adresse d'une page copiée depuis le
+  navigateur convient aussi.
+- **Jeton d'API** : le jeton de l'étape 1.
+- **Groupes d'hôtes (facultatif)** : noms séparés par des virgules, écrits
+  exactement comme dans Zabbix (majuscules comprises). Vide : tous les hôtes
+  supervisés que le jeton voit.
+- **Clés d'éléments (facultatif)** : jusqu'à 5 clés d'éléments numériques, par
+  exemple `system.cpu.util, vm.memory.utilization, vfs.fs.size[/,pused]`.
+  Chaque hôte qui a l'un de ces éléments reçoit une fonctionnalité avec sa
+  dernière valeur.
+- **Intervalle de rafraîchissement** : de 15 secondes à 5 minutes (30
+  secondes par défaut).
+- **Autoriser l'acquittement depuis les scènes** : décochez pour désactiver
+  l'action d'acquittement.
+- **Accepter les certificats auto-signés** : pour une adresse en `https://`
+  dont le certificat n'est pas reconnu par votre navigateur non plus.
+- **Langue des noms** : langue des noms des fonctionnalités et des résultats
+  de scène.
+
+Enregistrez, puis cliquez sur **Tester la connexion** : la version de Zabbix,
+le nombre d'hôtes et de problèmes actifs s'affichent.
+
+### 3. Ajouter les appareils
+
+Ouvrez l'onglet **Découverte** de l'intégration et ajoutez les hôtes à suivre,
+et l'appareil « Serveur Zabbix » si vous voulez les comptes par sévérité. Les
+déclencheurs de scène valent pour tous les hôtes, ajoutés à Gladys ou non.
+
+## Les appareils
+
+Chaque **hôte** (hôtes supervisés seulement ; les hôtes désactivés sont
+écartés) :
+
+| Fonctionnalité         | Valeur                                                                                       |
+| ---------------------- | -------------------------------------------------------------------------------------------- |
+| Disponible             | 1 disponible, 0 injoignable (une interface, ou l'agent actif en 7.0+)                        |
+| Problèmes actifs       | nombre de problèmes actifs (hors problèmes supprimés)                                        |
+| Sévérité la plus haute | 0 Non classé, 1 Information, 2 Avertissement, 3 Moyen, 4 Haut, 5 Désastre, -1 aucun problème |
+| En maintenance         | 1 pendant une maintenance Zabbix de l'hôte                                                   |
+| Éléments               | une fonctionnalité par clé d'élément configurée trouvée sur l'hôte, à son nom                |
+
+« Disponible » reste vide pour un hôte sans interface (seulement des éléments
+trappeur), dont Zabbix ne connaît pas la disponibilité.
+
+L'appareil **Serveur Zabbix** :
+
+- Problèmes actifs
+- Problèmes non classés
+- Problèmes information
+- Problèmes avertissement
+- Problèmes moyens
+- Problèmes hauts
+- Problèmes désastre
+
+Les valeurs ne sont envoyées à Gladys que quand elles changent, et toutes les
+6 heures sinon.
 
 ## Tableau de bord
 
-Ajoutez le widget **État de la démo** à un tableau de bord : il affiche en
-direct la température de la station météo et la puissance de la prise du
-bureau, la connexion utilisée par la prise (en orange si dégradée) et la
-position observée. Son bouton **Identifier la lampe** fait se signaler la
-lampe de démonstration.
+Le widget **Problèmes Zabbix** affiche trois tuiles (les problèmes actifs,
+ceux qui ne sont pas encore acquittés, les hôtes injoignables) puis les
+problèmes, les plus graves d'abord : le problème, son hôte (✓ une fois
+acquitté), et une icône et une couleur pour sa sévérité. Dix lignes au plus.
+**Actualiser** relit Zabbix. Dans ses réglages, choisissez des hôtes pour
+n'afficher que les leurs (vide : tous les hôtes).
+
+## Scènes
+
+### Déclencheurs
+
+- **Un problème apparaît** : un nouveau problème sur un hôte. Filtres : hôtes
+  (vide : n'importe lequel), sévérités (vide : n'importe laquelle ; pour
+  « Haut ou plus », choisissez Haut et Désastre). Variables : nom de l'hôte,
+  problème, sévérité, niveau de sévérité (0 à 5), identifiant d'événement
+  Zabbix.
+- **Un problème est résolu** : un problème est résolu ou fermé, avec les mêmes
+  filtres et variables, plus sa durée en minutes.
+- **Zabbix ne répond plus** : l'API ne répond pas deux fois de suite
+  (variables : adresse de Zabbix, erreur).
+
+Les problèmes déjà présents au démarrage de l'intégration ne sont pas
+annoncés. Un problème qui apparaît ou se résout pendant un redémarrage de
+Gladys ou de l'intégration est annoncé une fois à la lecture suivante. Les
+problèmes supprimés par une maintenance sont écartés, comme dans les tableaux
+de bord de Zabbix : ni comptés ni annoncés tant qu'ils sont supprimés, et pas
+pris pour résolus ; un problème apparu pendant la maintenance est annoncé à sa
+fin.
+
+### Actions
+
+- **Acquitter les problèmes d'un hôte** : acquitte dans Zabbix les problèmes
+  actifs de l'hôte, avec un message dans leur historique (vide : « Acquitté
+  depuis Gladys »). Renvoie le nombre de problèmes acquittés. Désactivable par
+  « Autoriser l'acquittement depuis les scènes ».
+- **Lire les problèmes** : compte et liste les problèmes actifs d'un hôte, ou
+  de tous, pour les actions suivantes : nombre, non acquittés, sévérité la plus
+  haute (en toutes lettres et en niveau), et la liste « hôte : problème ».
+
+### Idées de scènes
+
+- **Une lumière rouge pour les problèmes graves** : déclencheur « Un problème
+  apparaît », sévérités Haut et Désastre → la lampe du salon passe au rouge et
+  un message envoie `{{triggerEvent.data.host}} : {{triggerEvent.data.problem}}`.
+- **Retour à la normale** : déclencheur « Un problème est résolu », mêmes
+  filtres → message « Résolu après {{triggerEvent.data.duration_minutes}}
+  min ».
+- **Bilan du matin** : chaque jour à 8 h, « Lire les problèmes » → envoyer le
+  nombre et la liste quand le nombre dépasse 0.
+- **Vu depuis le canapé** : un bouton du tableau de bord ou une télécommande
+  Zigbee lance « Acquitter les problèmes d'un hôte » sur le NAS.
 
 ## Dépannage
 
-L'intégration journalise tout ce qu'elle fait : consultez les logs de
-l'intégration depuis l'interface Gladys (ou `docker logs` sur l'hôte) avec
-`LOG_LEVEL=debug` pour le détail complet.
+- **« Jeton d'API refusé ou expiré »** : vérifiez le jeton dans Utilisateurs
+  → Jetons API (activé, non expiré), et que son utilisateur est activé.
+- **« Zabbix ne répond pas »** : vérifiez l'adresse depuis la machine de
+  Gladys. `localhost` désigne le conteneur de l'intégration lui-même : utilisez
+  l'adresse IP de la machine de Zabbix.
+- **« Pas d'API Zabbix à cette adresse »** : l'adresse ne mène pas à
+  l'interface web ; `api_jsonrpc.php` doit se trouver à côté de ses pages.
+- **« Certificat refusé »** : cochez « Accepter les certificats auto-signés »,
+  ou utilisez l'adresse en `http://` sur le réseau local.
+- **« Aucun groupe d'hôtes de ce nom »** : les noms doivent correspondre
+  exactement à ceux de Zabbix. Le rapport de « Tester la connexion » liste les
+  noms inconnus.
+- **Un hôte manque** : il est désactivé, hors des groupes d'hôtes, ou
+  l'utilisateur du jeton n'a pas le droit de le lire.
+- **L'acquittement est refusé** : le rôle de l'utilisateur doit avoir
+  « Acquitter les problèmes », et un droit de lecture ou d'écriture sur le
+  groupe d'hôtes.
+
+## Limites
+
+- Un seul serveur Zabbix par intégration.
+- Seulement les problèmes des déclencheurs (ni événements internes, ni
+  services). Les problèmes supprimés sont écartés.
+- « Un problème est résolu » se déclenche aussi quand un problème sort du
+  périmètre : hôte retiré des groupes d'hôtes, déclencheur désactivé.
+- Au plus 30 événements de problème par lecture : une panne réseau peut en
+  lever des dizaines d'un coup ; le reste suit aux lectures suivantes.
+- Les fonctionnalités d'éléments ne portent que des nombres ; un pourcentage
+  s'affiche en niveau de 0 à 100, les autres unités sans unité.
+- Aucun quota sur l'API de Zabbix : chaque lecture envoie deux à six
+  requêtes.
+
+Sans lien avec Zabbix SIA. Zabbix est une marque de Zabbix SIA.

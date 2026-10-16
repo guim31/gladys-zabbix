@@ -1,93 +1,82 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
-import { DEVICE_BLUEPRINTS } from '../src/devices/index.js';
-import { MOTION_DETECTED_TRIGGER, motionSensor } from '../src/devices/motionSensor.js';
-import { SCENE_ACTIONS } from '../src/scenes.js';
-import { normalizeConfig } from '../src/config.js';
+import { BASE_CONFIG, createWorld, hostDevice } from './helpers/world.js';
 
-const manifest = JSON.parse(
-  await readFile(new URL('../gladys-assistant-integration.json', import.meta.url), 'utf8'),
-);
-const config = normalizeConfig();
+const NAS = '10684';
 
-const declarationOf = (list, key) => manifest[list].find((entry) => entry.key === key);
-const keysOf = (list) => (list ?? []).map((entry) => entry.key);
-const deviceIdOf = (gladys, key) =>
-  DEVICE_BLUEPRINTS.find((bp) => bp.key === key).deviceExternalId(gladys);
+async function world(t, options) {
+  const created = await createWorld(options);
+  t.after(() => created.app.stop());
+  return created;
+}
 
-// Let the async interval callback run to completion.
-const flush = () => new Promise((resolve) => setImmediate(resolve));
-
-test('the motion sensor fires one motion_detected event per detection, none on the clear', async (t) => {
-  t.mock.timers.enable({ apis: ['setInterval', 'setTimeout'] });
-  const gladys = createFakeGladys();
-  const stopPush = motionSensor.startPush(gladys, config);
-  try {
-    t.mock.timers.tick(60_000);
-    await flush();
-    assert.equal(gladys.fake.sceneEvents.length, 1, 'one detection, one event');
-    assert.equal(gladys.fake.sceneEvents[0].key, MOTION_DETECTED_TRIGGER);
-    assert.equal(gladys.fake.states.at(-1).state, 1, 'the state is still published');
-
-    t.mock.timers.tick(10_000);
-    await flush();
-    assert.equal(gladys.fake.states.at(-1).state, 0, 'the detection is cleared');
-    assert.equal(gladys.fake.sceneEvents.length, 1, 'the clear fires no event');
-  } finally {
-    stopPush();
-  }
+test('acknowledge_host_problems acknowledges the pending problems of the host, with a message', async (t) => {
+  const w = await world(t);
+  const device = hostDevice(w.gladys, NAS);
+  const ack = await w.fake.sceneAction('acknowledge_host_problems', { device, message: ' Seen ' });
+  assert.equal(ack.success, true, ack.error);
+  assert.deepEqual(ack.data.outputs, { acknowledged: 2 });
+  assert.deepEqual(w.zabbix.acknowledged, { eventids: ['26', '25'], action: 6, message: 'Seen' });
+  // Read again at once: nothing left to acknowledge.
+  const again = await w.fake.sceneAction('acknowledge_host_problems', { device });
+  assert.deepEqual(again.data.outputs, { acknowledged: 0 });
 });
 
-test('motion_detected data only carries keys the trigger declares', async (t) => {
-  t.mock.timers.enable({ apis: ['setInterval', 'setTimeout'] });
-  const gladys = createFakeGladys();
-  const stopPush = motionSensor.startPush(gladys, config);
-  try {
-    t.mock.timers.tick(60_000);
-    await flush();
-  } finally {
-    stopPush();
-  }
-  const [{ data }] = gladys.fake.sceneEvents;
-  const trigger = declarationOf('scene_triggers', MOTION_DETECTED_TRIGGER);
-  // The core keeps the `fields` keys (filters) and the `variables` keys
-  // (exposed to the scene): any other key would be silently dropped.
-  const declared = [...keysOf(trigger.fields), ...keysOf(trigger.variables)];
-  for (const [key, value] of Object.entries(data)) {
-    assert.ok(declared.includes(key), `data.${key} is not declared, the core would drop it`);
-    assert.ok(value === null || typeof value !== 'object', `data.${key} must be a primitive`);
-  }
-  // A `"source": "devices"` filter stores a device external_id.
-  assert.equal(data.device, deviceIdOf(gladys, 'motion-sensor'));
-  const targets = trigger.fields.find((field) => field.key === 'target').options;
-  assert.ok(
-    targets.some((option) => option.value === data.target),
-    `data.target "${data.target}" must be one of the filter options`,
-  );
+test('acknowledge_host_problems: the default message in the configured language', async (t) => {
+  const w = await world(t, { config: { ...BASE_CONFIG, language: 'fr' } });
+  await w.fake.sceneAction('acknowledge_host_problems', { device: hostDevice(w.gladys, NAS) });
+  assert.equal(w.zabbix.acknowledged.message, 'Acquitté depuis Gladys');
 });
 
-test('identify_device signals the chosen device and returns the declared outputs', async () => {
-  const gladys = createFakeGladys();
-  const outputs = await SCENE_ACTIONS.identify_device(gladys, {
-    fields: { device: deviceIdOf(gladys, 'light') },
-    config,
+test('acknowledge_host_problems: turned off, refused, unknown host', async (t) => {
+  const off = await world(t, { config: { ...BASE_CONFIG, allow_acknowledge: false } });
+  const disabled = await off.fake.sceneAction('acknowledge_host_problems', {
+    device: hostDevice(off.gladys, NAS),
   });
-  assert.deepEqual(outputs, { signalled: true });
-  const declared = keysOf(declarationOf('scene_actions', 'identify_device').outputs);
-  for (const key of Object.keys(outputs)) {
-    assert.ok(declared.includes(key), `output "${key}" is not declared, the core would drop it`);
-  }
+  assert.equal(disabled.success, false);
+  assert.match(disabled.error, /turned off/);
+  assert.equal(off.zabbix.acknowledged, undefined);
+
+  const w = await world(t);
+  w.zabbix.ackRefused = true;
+  const refused = await w.fake.sceneAction('acknowledge_host_problems', {
+    device: hostDevice(w.gladys, NAS),
+  });
+  assert.equal(refused.success, false);
+  assert.match(refused.error, /may acknowledge/);
+  const unknown = await w.fake.sceneAction('acknowledge_host_problems', { device: 'nope' });
+  assert.match(unknown.error, /not a Zabbix host/);
 });
 
-test('identify_device reports a device that cannot signal itself through its output', async () => {
-  // Not a failure: a scene action is never a condition, the scene author
-  // gates the following actions on the output instead.
-  const gladys = createFakeGladys();
-  const outputs = await SCENE_ACTIONS.identify_device(gladys, {
-    fields: { device: deviceIdOf(gladys, 'weather-station') },
-    config,
+test('get_problems: every host, or one, in words', async (t) => {
+  const w = await world(t);
+  const all = await w.fake.sceneAction('get_problems', {});
+  assert.equal(all.data.outputs.count, 6);
+  assert.equal(all.data.outputs.unacknowledged, 6);
+  assert.equal(all.data.outputs.highest_severity, 'High');
+  assert.equal(all.data.outputs.highest_severity_level, 4);
+  assert.match(all.data.outputs.names, /^NAS: Disk failing on NAS, /);
+
+  const nas = await w.fake.sceneAction('get_problems', { device: hostDevice(w.gladys, NAS) });
+  assert.deepEqual(nas.data.outputs, {
+    count: 2,
+    unacknowledged: 2,
+    highest_severity: 'High',
+    highest_severity_level: 4,
+    names: 'NAS: Disk failing on NAS, NAS: Pool almost full',
   });
-  assert.deepEqual(outputs, { signalled: false });
+  w.zabbix.problems = [];
+  w.clock.advance(20_000);
+  const none = await w.fake.sceneAction('get_problems', {});
+  assert.equal(none.data.outputs.highest_severity, 'No problem');
+  assert.equal(none.data.outputs.highest_severity_level, -1);
+});
+
+test('the scene actions fail clearly while Zabbix does not answer', async (t) => {
+  const w = await world(t);
+  w.zabbix.failure = 'down';
+  w.clock.advance(20_000);
+  const ack = await w.fake.sceneAction('get_problems', {});
+  assert.equal(ack.success, false);
+  assert.match(ack.error, /does not answer/);
 });

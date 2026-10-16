@@ -1,8 +1,8 @@
 {
-  "name": "gladys-integration-template-js",
+  "name": "gladys-zabbix",
   "version": "1.0.0",
   "private": true,
-  "description": "Official starter template to build an external integration for Gladys Assistant with the JavaScript SDK.",
+  "description": "Gladys Assistant integration for Zabbix: hosts and problems as devices, scene triggers when a problem starts or ends, acknowledgement from scenes, a dashboard widget.",
   "type": "module",
   "main": "index.js",
   "scripts": {

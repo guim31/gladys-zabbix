@@ -1,0 +1,467 @@
+{
+  "version": {
+    "request": {
+      "method": "apiinfo.version",
+      "params": {}
+    },
+    "status": 200,
+    "response": {
+      "jsonrpc": "2.0",
+      "result": "7.0.31",
+      "id": 1
+    }
+  },
+  "version_with_token": {
+    "request": {
+      "method": "apiinfo.version",
+      "params": {}
+    },
+    "status": 200,
+    "response": {
+      "jsonrpc": "2.0",
+      "error": {
+        "code": -32602,
+        "message": "Invalid params.",
+        "data": "The \"apiinfo.version\" method must be called without authorization header."
+      },
+      "id": 1
+    }
+  },
+  "hostgroups": {
+    "request": {
+      "method": "hostgroup.get",
+      "params": {
+        "output": ["groupid", "name"],
+        "filter": {
+          "name": ["Homelab", "Missing"]
+        }
+      }
+    },
+    "status": 200,
+    "response": {
+      "jsonrpc": "2.0",
+      "result": [
+        {
+          "groupid": "22",
+          "name": "Homelab"
+        }
+      ],
+      "id": 1
+    }
+  },
+  "hosts": {
+    "request": {
+      "method": "host.get",
+      "params": {
+        "output": ["hostid", "host", "name", "status", "maintenance_status", "active_available"],
+        "selectInterfaces": ["type", "main", "available"],
+        "groupids": ["22"],
+        "filter": {
+          "status": 0
+        }
+      }
+    },
+    "status": 200,
+    "response": {
+      "jsonrpc": "2.0",
+      "result": [
+        {
+          "hostid": "10683",
+          "host": "agent-host",
+          "name": "Web server",
+          "status": "0",
+          "maintenance_status": "0",
+          "active_available": "1",
+          "interfaces": [
+            {
+              "type": "1",
+              "main": "1",
+              "available": "1"
+            }
+          ]
+        },
+        {
+          "hostid": "10684",
+          "host": "nas",
+          "name": "NAS",
+          "status": "0",
+          "maintenance_status": "0",
+          "active_available": "0",
+          "interfaces": []
+        }
+      ],
+      "id": 1
+    }
+  },
+  "problems": {
+    "request": {
+      "method": "problem.get",
+      "params": {
+        "output": [
+          "eventid",
+          "objectid",
+          "name",
+          "severity",
+          "acknowledged",
+          "clock",
+          "suppressed"
+        ],
+        "source": 0,
+        "object": 0,
+        "suppressed": false,
+        "groupids": ["22"],
+        "sortfield": ["eventid"],
+        "sortorder": "DESC"
+      }
+    },
+    "status": 200,
+    "response": {
+      "jsonrpc": "2.0",
+      "result": [
+        {
+          "eventid": "41",
+          "objectid": "25262",
+          "name": "Linux: FS [/etc/hostname]: Space is low (used > 80%, total 467.9GB)",
+          "severity": "2",
+          "acknowledged": "0",
+          "clock": "1792158200",
+          "suppressed": "0"
+        },
+        {
+          "eventid": "40",
+          "objectid": "25261",
+          "name": "Linux: FS [/etc/resolv.conf]: Space is low (used > 80%, total 467.9GB)",
+          "severity": "2",
+          "acknowledged": "0",
+          "clock": "1792158200",
+          "suppressed": "0"
+        },
+        {
+          "eventid": "39",
+          "objectid": "25263",
+          "name": "Linux: FS [/etc/hosts]: Space is low (used > 80%, total 467.9GB)",
+          "severity": "2",
+          "acknowledged": "0",
+          "clock": "1792158200",
+          "suppressed": "0"
+        },
+        {
+          "eventid": "32",
+          "objectid": "25238",
+          "name": "Linux: High swap space usage (less than 50% free)",
+          "severity": "2",
+          "acknowledged": "0",
+          "clock": "1792158171",
+          "suppressed": "0"
+        },
+        {
+          "eventid": "26",
+          "objectid": "25252",
+          "name": "Disk failing on NAS",
+          "severity": "4",
+          "acknowledged": "0",
+          "clock": "1792158162",
+          "suppressed": "0"
+        },
+        {
+          "eventid": "25",
+          "objectid": "25253",
+          "name": "Pool almost full",
+          "severity": "2",
+          "acknowledged": "0",
+          "clock": "1792158130",
+          "suppressed": "0"
+        }
+      ],
+      "id": 1
+    }
+  },
+  "triggers": {
+    "request": {
+      "method": "trigger.get",
+      "params": {
+        "triggerids": ["25262", "25261", "25263", "25238", "25252", "25253"],
+        "output": ["triggerid", "description", "priority"],
+        "selectHosts": ["hostid", "host", "name"],
+        "monitored": true
+      }
+    },
+    "status": 200,
+    "response": {
+      "jsonrpc": "2.0",
+      "result": [
+        {
+          "triggerid": "25238",
+          "description": "Linux: High swap space usage",
+          "priority": "2",
+          "hosts": [
+            {
+              "hostid": "10683",
+              "host": "agent-host",
+              "name": "Web server"
+            }
+          ]
+        },
+        {
+          "triggerid": "25252",
+          "description": "Disk failing on {HOST.NAME}",
+          "priority": "4",
+          "hosts": [
+            {
+              "hostid": "10684",
+              "host": "nas",
+              "name": "NAS"
+            }
+          ]
+        },
+        {
+          "triggerid": "25253",
+          "description": "Pool almost full",
+          "priority": "2",
+          "hosts": [
+            {
+              "hostid": "10684",
+              "host": "nas",
+              "name": "NAS"
+            }
+          ]
+        },
+        {
+          "triggerid": "25261",
+          "description": "Linux: FS [/etc/resolv.conf]: Space is low",
+          "priority": "2",
+          "hosts": [
+            {
+              "hostid": "10683",
+              "host": "agent-host",
+              "name": "Web server"
+            }
+          ]
+        },
+        {
+          "triggerid": "25262",
+          "description": "Linux: FS [/etc/hostname]: Space is low",
+          "priority": "2",
+          "hosts": [
+            {
+              "hostid": "10683",
+              "host": "agent-host",
+              "name": "Web server"
+            }
+          ]
+        },
+        {
+          "triggerid": "25263",
+          "description": "Linux: FS [/etc/hosts]: Space is low",
+          "priority": "2",
+          "hosts": [
+            {
+              "hostid": "10683",
+              "host": "agent-host",
+              "name": "Web server"
+            }
+          ]
+        }
+      ],
+      "id": 1
+    }
+  },
+  "items": {
+    "request": {
+      "method": "item.get",
+      "params": {
+        "groupids": ["22"],
+        "output": [
+          "itemid",
+          "hostid",
+          "key_",
+          "name",
+          "lastvalue",
+          "lastclock",
+          "units",
+          "value_type"
+        ],
+        "filter": {
+          "key_": ["system.cpu.util", "vm.memory.utilization", "pool.pused"]
+        },
+        "monitored": true
+      }
+    },
+    "status": 200,
+    "response": {
+      "jsonrpc": "2.0",
+      "result": [
+        {
+          "itemid": "50781",
+          "hostid": "10683",
+          "key_": "system.cpu.util",
+          "name": "CPU utilization",
+          "units": "%",
+          "value_type": "0",
+          "lastclock": "1792158617",
+          "lastvalue": "49.427155"
+        },
+        {
+          "itemid": "50812",
+          "hostid": "10684",
+          "key_": "pool.pused",
+          "name": "Pool used",
+          "units": "%",
+          "value_type": "0",
+          "lastclock": "1792158626",
+          "lastvalue": "96"
+        }
+      ],
+      "id": 1
+    }
+  },
+  "bad_token": {
+    "request": {
+      "method": "host.get",
+      "params": {
+        "output": ["hostid"]
+      }
+    },
+    "status": 200,
+    "response": {
+      "jsonrpc": "2.0",
+      "error": {
+        "code": -32602,
+        "message": "Invalid params.",
+        "data": "Not authorized."
+      },
+      "id": 1
+    }
+  },
+  "no_token": {
+    "request": {
+      "method": "host.get",
+      "params": {
+        "output": ["hostid"]
+      }
+    },
+    "status": 200,
+    "response": {
+      "jsonrpc": "2.0",
+      "error": {
+        "code": -32602,
+        "message": "Invalid params.",
+        "data": "Not authorized."
+      },
+      "id": 1
+    }
+  },
+  "auth_in_body": {
+    "request": {
+      "method": "host.get",
+      "params": {
+        "output": ["hostid"],
+        "limit": 1
+      }
+    },
+    "status": 200,
+    "response": {
+      "jsonrpc": "2.0",
+      "result": [
+        {
+          "hostid": "10683"
+        }
+      ],
+      "id": 1
+    }
+  },
+  "version_auth_in_body": {
+    "request": {
+      "method": "apiinfo.version",
+      "params": {}
+    },
+    "status": 200,
+    "response": {
+      "jsonrpc": "2.0",
+      "error": {
+        "code": -32602,
+        "message": "Invalid params.",
+        "data": "The \"apiinfo.version\" method must be called without the \"auth\" parameter."
+      },
+      "id": 1
+    }
+  },
+  "acknowledge": {
+    "request": {
+      "method": "event.acknowledge",
+      "params": {
+        "eventids": ["41"],
+        "action": 6,
+        "message": "Seen from Gladys"
+      }
+    },
+    "status": 200,
+    "response": {
+      "jsonrpc": "2.0",
+      "result": {
+        "eventids": [41]
+      },
+      "id": 1
+    }
+  },
+  "acknowledge_again": {
+    "request": {
+      "method": "event.acknowledge",
+      "params": {
+        "eventids": ["41"],
+        "action": 6,
+        "message": "Again"
+      }
+    },
+    "status": 200,
+    "response": {
+      "jsonrpc": "2.0",
+      "result": {
+        "eventids": [41]
+      },
+      "id": 1
+    }
+  },
+  "problems_after_ack": {
+    "request": {
+      "method": "problem.get",
+      "params": {
+        "output": ["eventid", "acknowledged"],
+        "source": 0,
+        "object": 0,
+        "groupids": ["22"]
+      }
+    },
+    "status": 200,
+    "response": {
+      "jsonrpc": "2.0",
+      "result": [
+        {
+          "eventid": "25",
+          "acknowledged": "0"
+        },
+        {
+          "eventid": "26",
+          "acknowledged": "0"
+        },
+        {
+          "eventid": "32",
+          "acknowledged": "0"
+        },
+        {
+          "eventid": "39",
+          "acknowledged": "0"
+        },
+        {
+          "eventid": "40",
+          "acknowledged": "0"
+        },
+        {
+          "eventid": "41",
+          "acknowledged": "1"
+        }
+      ],
+      "id": 1
+    }
+  }
+}
