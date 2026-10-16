@@ -13,6 +13,7 @@
 // announced, once. The very first read only records them.
 // -----------------------------------------------------------------------------
 
+import { createHash } from 'node:crypto';
 import { DEVICE_TRANSPORTS, createLogger } from '@gladysassistant/integration-sdk';
 import {
   buildHostDevice,
@@ -23,7 +24,7 @@ import {
   serverIds,
   serverValues,
 } from './devices.js';
-import { ERROR_KINDS, ZabbixClient } from './zabbix/client.js';
+import { ERROR_KINDS, ZabbixClient, ZabbixError } from './zabbix/client.js';
 import { hostOf } from './config.js';
 import { FailureLog } from './logs.js';
 import { CONNECTION_TEXT, ERROR_TEXT, REPORT_TEXT, labelled, pick, severityName } from './texts.js';
@@ -54,16 +55,27 @@ export const HUB_TIMINGS = {
 };
 
 // Scene events per read, at most: Gladys accepts 300 per minute, and a
-// network outage can raise dozens of problems at once. The rest is logged.
+// network outage can raise dozens of problems at once. The rest waits for the
+// next reads.
 export const MAX_EVENTS_PER_READ = 30;
 
 const MAX_STATES_PER_REQUEST = 100;
+// States per read, at most (Gladys accepts 300 per minute): the changes first,
+// then the heartbeats; the rest goes at the next read.
+export const MAX_STATES_PER_READ = 200;
 
 const signature = (config) =>
   JSON.stringify([config.apiUrl, config.apiToken, config.allowSelfSigned]);
 // What decides which problems are seen: another scope does not resolve the
 // problems of the previous one.
-const scopeOf = (config) => JSON.stringify([config.apiUrl, config.hostGroups]);
+// The token is part of it (another user sees other hosts), hashed: /data
+// never holds it.
+const scopeOf = (config) =>
+  JSON.stringify([
+    config.apiUrl,
+    config.hostGroups,
+    createHash('sha256').update(config.apiToken).digest('hex').slice(0, 16),
+  ]);
 
 export class ZabbixHub {
   /**
@@ -155,6 +167,7 @@ export class ZabbixHub {
     }
     const scope = scopeOf(config);
     if (this.saved.scope !== scope) {
+      this.generation += 1; // a read in progress for the old scope is ignored
       this.saved = { scope, primed: false, problems: {} };
       this.store.save(this.saved);
     }
@@ -190,8 +203,8 @@ export class ZabbixHub {
 
   // --- Reading Zabbix ------------------------------------------------------------
 
-  async pollAll({ publish = false } = {}) {
-    const changed = await this.poll();
+  async pollAll({ publish = false, fresh = false } = {}) {
+    const changed = await this.poll({ fresh });
     await this.afterChanges(changed, { publish });
   }
 
@@ -211,13 +224,21 @@ export class ZabbixHub {
    * Read Zabbix and apply what changed. Concurrent calls share the read.
    * @returns {Promise<boolean>} whether the widget shows something new
    */
-  poll() {
+  poll({ fresh = false } = {}) {
     if (!this.client) {
       return Promise.resolve(false);
     }
-    this.polling ??= this.read().finally(() => {
-      this.polling = null;
-    });
+    if (this.polling && (fresh || this.pollingGeneration !== this.generation)) {
+      // A read started before an acknowledgement or a new configuration:
+      // read again once it is over.
+      return this.polling.catch(() => {}).then(() => this.poll());
+    }
+    if (!this.polling) {
+      this.pollingGeneration = this.generation;
+      this.polling = this.read().finally(() => {
+        this.polling = null;
+      });
+    }
     return this.polling;
   }
 
@@ -233,10 +254,9 @@ export class ZabbixHub {
         itemKeys: this.config.itemKeys,
       });
       return generation === this.generation ? await this.applySuccess(snapshot) : false;
-    } catch (err) {
-      if (!err.kind) {
-        throw err;
-      }
+    } catch (caught) {
+      // An answer of an unexpected shape (a result that is not a list…).
+      const err = caught.kind ? caught : new ZabbixError(ERROR_KINDS.HTTP, caught.message);
       client.reset(); // read the version again: Zabbix may have been upgraded
       return generation === this.generation ? await this.applyFailure(err) : false;
     }
@@ -266,13 +286,16 @@ export class ZabbixHub {
     this.data = {
       version,
       hosts: new Map(hosts.map((host) => [host.id, host])),
-      problems,
+      // Suppressed problems (a maintenance hides them) count nowhere, as in
+      // the Zabbix dashboards; `allProblems` keeps them for the transitions.
+      problems: problems.filter((problem) => !problem.suppressed),
+      allProblems: problems,
       items,
       missingGroups,
     };
     if (
       previous &&
-      (JSON.stringify(previous.problems) !== JSON.stringify(problems) ||
+      (JSON.stringify(previous.problems) !== JSON.stringify(this.data.problems) ||
         JSON.stringify([...previous.hosts.values()]) !== JSON.stringify(hosts))
     ) {
       widgetChanged = true;
@@ -322,54 +345,70 @@ export class ZabbixHub {
     this.retryTimer.unref?.();
   }
 
-  /** Compare the problems with the ones already seen; fire the scene events. */
+  /**
+   * Compare the problems with the ones already seen; fire the scene events.
+   * A problem is marked announced only once Gladys accepted its event (Gladys
+   * restarting, a burst beyond the cap: sent at a next read), and its end is
+   * announced only if its start was. A suppressed problem is not announced
+   * until its maintenance is over, nor taken for resolved meanwhile.
+   */
   async transitions() {
     const known = this.saved.problems;
-    const current = new Map(this.data.problems.map((problem) => [problem.eventId, problem]));
-    const announce = this.saved.primed;
+    const primed = this.saved.primed;
+    const current = new Map(this.data.allProblems.map((problem) => [problem.eventId, problem]));
     const events = [];
     for (const problem of [...current.values()].reverse()) {
-      if (known[problem.eventId]) {
-        continue;
+      let entry = known[problem.eventId];
+      if (!entry) {
+        entry = {
+          hostId: problem.hostId,
+          host: this.hostName(problem.hostId),
+          name: problem.name,
+          severity: problem.severity,
+          clock: problem.clock,
+          // The problems already there at the first read are not announced.
+          announced: !primed,
+        };
+        known[problem.eventId] = entry;
       }
-      const host = this.data.hosts.get(problem.hostId);
-      known[problem.eventId] = {
-        hostId: problem.hostId,
-        host: host?.name ?? problem.hostId,
-        name: problem.name,
-        severity: problem.severity,
-        clock: problem.clock,
-      };
-      if (announce) {
-        events.push([TRIGGERS.STARTED, problem.eventId, known[problem.eventId]]);
+      if (!entry.announced && !problem.suppressed) {
+        events.push([TRIGGERS.STARTED, problem.eventId, entry]);
       }
     }
     for (const [eventId, entry] of Object.entries(known)) {
-      if (!current.has(eventId)) {
-        delete known[eventId];
-        if (announce) {
-          events.push([TRIGGERS.RESOLVED, eventId, entry]);
-        }
+      if (current.has(eventId)) {
+        continue;
+      }
+      if (entry.announced === false) {
+        delete known[eventId]; // never announced: its end is not either
+      } else {
+        events.push([TRIGGERS.RESOLVED, eventId, entry]);
       }
     }
     this.saved.primed = true;
-    this.store.save(this.saved);
 
-    for (const [index, [key, eventId, entry]] of events.entries()) {
-      const what = key === TRIGGERS.STARTED ? 'Problem' : 'Resolved';
-      if (index >= MAX_EVENTS_PER_READ) {
-        logger.warn(`${events.length - index} more problem change(s) not sent to the scenes`);
-        break;
-      }
-      logger.debug(`${what} on ${entry.host}: ${entry.name}`);
+    const sent = events.slice(0, MAX_EVENTS_PER_READ);
+    if (events.length > sent.length) {
+      logger.warn(`${events.length - sent.length} problem change(s) left for the next read`);
+    }
+    for (const [key, eventId, entry] of sent) {
+      logger.debug(`${key} on ${entry.host}: ${entry.name}`);
       const data = this.problemEvent(eventId, entry);
       if (key === TRIGGERS.RESOLVED) {
         data.duration_minutes = entry.clock
           ? Math.max(0, Math.round((this.now() / 1000 - entry.clock) / 60))
           : 0;
       }
-      await this.fireEvent(key, data);
+      if (!(await this.fireEvent(key, data))) {
+        break; // Gladys refuses: keep the order, try again at the next read
+      }
+      if (key === TRIGGERS.STARTED) {
+        entry.announced = true;
+      } else {
+        delete known[eventId];
+      }
     }
+    this.store.save(this.saved);
   }
 
   problemEvent(eventId, entry) {
@@ -383,11 +422,15 @@ export class ZabbixHub {
     };
   }
 
+  /** @returns {Promise<boolean>} whether Gladys accepted the event */
   async fireEvent(key, data) {
     try {
       await this.gladys.publishSceneEvent(key, data);
+      this.failureLog.recover('event', 'Scene events accepted again');
+      return true;
     } catch (err) {
-      logger.warn(`Scene event ${key} refused: ${err.message}`);
+      this.failureLog.fail('event', `Scene event refused: ${err.message}`);
+      return false;
     }
   }
 
@@ -419,7 +462,9 @@ export class ZabbixHub {
 
   /** Publish the Discovery list when it changed (a host added, renamed…). */
   async publishDevices({ force = false } = {}) {
-    if (!this.data && !force) {
+    // Nothing read yet: keep the list Gladys has (an empty list only once
+    // the address is removed from the configuration).
+    if (!this.data && (!force || this.client)) {
       return;
     }
     const devices = this.discoveredDevices();
@@ -484,17 +529,18 @@ export class ZabbixHub {
 
   async sendStates(values, { force = false } = {}) {
     const now = this.now();
-    const states = values
-      .filter(({ externalId, value }) => {
-        if (value === null) {
-          return false; // unknown: the last value stands
-        }
-        return (
-          force ||
-          this.published.get(externalId) !== value ||
-          now - (this.publishedAt.get(externalId) ?? 0) >= this.timings.heartbeatMs
-        );
-      })
+    const known = values.filter(({ value }) => value !== null); // unknown: the last value stands
+    const changed = known.filter(
+      ({ externalId, value }) => force || this.published.get(externalId) !== value,
+    );
+    const due = known.filter(
+      ({ externalId, value }) =>
+        !force &&
+        this.published.get(externalId) === value &&
+        now - (this.publishedAt.get(externalId) ?? 0) >= this.timings.heartbeatMs,
+    );
+    const states = [...changed, ...due]
+      .slice(0, force ? Infinity : MAX_STATES_PER_READ)
       .map(({ externalId, value }) => ({ device_feature_external_id: externalId, state: value }));
     for (let at = 0; at < states.length; at += MAX_STATES_PER_REQUEST) {
       const batch = states.slice(at, at + MAX_STATES_PER_REQUEST);
@@ -605,14 +651,14 @@ export class ZabbixHub {
 
   /** "Test the connection": read now, one line. */
   async testConnection() {
-    await this.pollAll({ publish: true });
+    await this.pollAll({ publish: true, fresh: true });
     const message = {};
     for (const [language, text] of Object.entries(REPORT_TEXT)) {
       const status = this.connectionStatus();
-      if (!status.connected) {
+      if (!status.connected || !this.data) {
         message[language] = labelled(
           this.config.apiUrl ? this.serverName() : 'Zabbix',
-          pick(status.message, language),
+          pick(status.message ?? ERROR_TEXT[ERROR_KINDS.UNREACHABLE], language),
           language,
         );
         continue;

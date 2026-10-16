@@ -11,9 +11,9 @@ Dashboard listet die aktuellen Probleme.
 Die Integration liest die Zabbix-API in deinem lokalen Netzwerk, mit einem
 API-Token. Nichts läuft über eine Cloud.
 
-Getestet mit einem echten Zabbix 7.0 LTS (offizielle Docker-Images, Agent 2
-und Trapper-Items), für Zabbix 6.0 und 6.4 anhand der dokumentierten
-Unterschiede ihrer API. Rückmeldungen sind willkommen:
+Getestet mit einem echten Zabbix 7.0 LTS und 6.0 LTS (offizielle
+Docker-Images, Agent 2 und Trapper-Items); Zabbix 5.4 und 6.4 nur anhand der
+dokumentierten Unterschiede ihrer API. Rückmeldungen sind willkommen:
 [github.com/guim31/gladys-zabbix/issues](https://github.com/guim31/gladys-zabbix/issues).
 
 ## Was du brauchst
@@ -122,7 +122,9 @@ Die beim Start der Integration schon vorhandenen Probleme werden nicht
 gemeldet. Ein Problem, das während eines Neustarts von Gladys oder der
 Integration beginnt oder endet, wird beim nächsten Lesen einmal gemeldet.
 Durch eine Wartung unterdrückte Probleme werden ausgelassen, wie in den
-Dashboards von Zabbix.
+Dashboards von Zabbix: weder gezählt noch gemeldet, solange sie unterdrückt
+sind, und nicht als behoben gewertet; ein während der Wartung entstandenes
+Problem wird an ihrem Ende gemeldet.
 
 ### Aktionen
 
@@ -174,10 +176,10 @@ Dashboards von Zabbix.
 - „Ein Problem ist behoben“ löst auch aus, wenn ein Problem den Bereich
   verlässt: ein Host aus den Hostgruppen entfernt, ein Trigger deaktiviert.
 - Höchstens 30 Problem-Ereignisse pro Lesen: Ein Netzwerkausfall kann Dutzende
-  auf einmal auslösen; der Rest wird nur protokolliert.
+  auf einmal auslösen; der Rest folgt beim nächsten Lesen.
 - Item-Funktionen enthalten nur Zahlen; ein Prozentwert erscheint als Stand
   von 0 bis 100, andere Einheiten ohne Einheit.
-- Kein Kontingent auf der Zabbix-API: Jedes Lesen schickt vier bis sechs
+- Kein Kontingent auf der Zabbix-API: Jedes Lesen schickt zwei bis sechs
   Anfragen.
 
 Nicht mit Zabbix SIA verbunden. Zabbix ist eine Marke von Zabbix SIA.

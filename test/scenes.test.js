@@ -43,7 +43,7 @@ test('acknowledge_host_problems: turned off, refused, unknown host', async (t) =
     device: hostDevice(w.gladys, NAS),
   });
   assert.equal(refused.success, false);
-  assert.match(refused.error, /right to acknowledge/);
+  assert.match(refused.error, /may acknowledge/);
   const unknown = await w.fake.sceneAction('acknowledge_host_problems', { device: 'nope' });
   assert.match(unknown.error, /not a Zabbix host/);
 });

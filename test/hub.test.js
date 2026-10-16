@@ -236,13 +236,73 @@ test('a normal cycle writes nothing at the info level; a failure one line each w
   );
 });
 
-test('a burst of new problems is capped per read', async (t) => {
+test('a burst of new problems is capped per read, the rest follows', async (t) => {
   const w = await world(t);
   for (let index = 0; index < 40; index += 1) {
     w.zabbix.raise({ name: `Problem ${index}` });
   }
   await w.hub.pollAll();
   assert.equal(w.fake.sceneEvents.length, 30);
+  await w.hub.pollAll();
+  assert.equal(w.fake.sceneEvents.length, 40);
+  await w.hub.pollAll();
+  assert.equal(w.fake.sceneEvents.length, 40);
+});
+
+test('Gladys refusing the scene events (restarting): sent at a next read, once', async (t) => {
+  const w = await world(t);
+  const original = w.gladys.publishSceneEvent.bind(w.gladys);
+  let refuse = true;
+  w.gladys.publishSceneEvent = (key, data) =>
+    refuse ? Promise.reject(new Error('ECONNREFUSED')) : original(key, data);
+  const eventId = w.zabbix.raise({ name: 'While Gladys restarts' });
+  await w.hub.pollAll();
+  assert.equal(w.fake.sceneEvents.length, 0);
+  refuse = false;
+  await w.hub.pollAll();
+  await w.hub.pollAll();
+  assert.deepEqual(
+    w.fake.sceneEvents.map((event) => [event.key, event.data.event_id]),
+    [[TRIGGERS.STARTED, eventId]],
+  );
+});
+
+test('a maintenance that suppresses a problem neither resolves nor repeats it', async (t) => {
+  const w = await world(t);
+  await createDevices(w);
+  const eventId = w.zabbix.raise({ hostid: NAS, name: 'Behind maintenance' });
+  await w.hub.pollAll();
+  const problem = w.zabbix.problems.find((entry) => entry.eventid === eventId);
+  problem.suppressed = '1';
+  await w.hub.pollAll();
+  assert.equal(w.fake.lastState(hostFeature(w.gladys, NAS, FEATURE_KEYS.PROBLEMS)), 2);
+  problem.suppressed = '0';
+  await w.hub.pollAll();
+  assert.deepEqual(
+    w.fake.sceneEvents.map((event) => event.key),
+    [TRIGGERS.STARTED],
+  );
+  // Raised while suppressed: announced once the maintenance is over.
+  const hidden = w.zabbix.raise({ name: 'Raised in maintenance' });
+  w.zabbix.problems[0].suppressed = '1';
+  await w.hub.pollAll();
+  assert.equal(w.fake.sceneEvents.length, 1);
+  w.zabbix.problems[0].suppressed = '0';
+  await w.hub.pollAll();
+  assert.equal(w.fake.sceneEvents.at(-1).data.event_id, hidden);
+});
+
+test('a new host group filter during a read: the old read does not prime the new scope', async (t) => {
+  const w = await world(t);
+  const reading = w.hub.pollAll();
+  await w.fake.configUpdated({ ...BASE_CONFIG, host_groups: 'Linux servers' });
+  await reading;
+  await w.hub.pollAll();
+  assert.deepEqual(w.fake.sceneEvents, []);
+  assert.deepEqual(
+    w.fake.discoveredDevices.map((device) => device.name),
+    ['Zabbix server', 'Web server'],
+  );
 });
 
 test('no configuration: a clear connection status, no request', async (t) => {

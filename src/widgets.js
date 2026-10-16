@@ -78,12 +78,9 @@ const refreshButton = (language) => ({
 
 /** The hosts the widget shows: the chosen host devices, or null for every host. */
 export function chosenHosts(hub, settings) {
-  const chosen = [settings?.hosts ?? []]
-    .flat()
-    .filter((id) => typeof id === 'string' && id)
-    .map((id) => hub.findHost(id)?.id)
-    .filter(Boolean);
-  return chosen.length > 0 ? new Set(chosen) : null;
+  const chosen = [settings?.hosts ?? []].flat().filter((id) => typeof id === 'string' && id);
+  // Chosen hosts that left the scope show nothing, not every host.
+  return chosen.length > 0 ? new Set(chosen.map((id) => hub.findHost(id)?.id)) : null;
 }
 
 async function get(hub, { settings, language = 'en' }) {
@@ -102,7 +99,7 @@ async function get(hub, { settings, language = 'en' }) {
       }
     : null;
   if (!hub.data) {
-    return { ttl_seconds: 30, components: [error, refreshButton(language)] };
+    return { ttl_seconds: 30, components: [error, refreshButton(language)].filter(Boolean) };
   }
 
   const scope = chosenHosts(hub, settings);
@@ -184,7 +181,7 @@ async function action(hub, { actionKey }) {
   if (actionKey !== ACTIONS.REFRESH) {
     throw new Error(`Unknown action ${actionKey}`);
   }
-  await hub.pollAll();
+  await hub.pollAll({ fresh: true });
   return { message: TEXT.refreshed };
 }
 

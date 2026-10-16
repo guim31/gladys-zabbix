@@ -11,9 +11,9 @@ bord liste les problèmes en cours.
 L'intégration lit l'API de Zabbix sur votre réseau local, avec un jeton d'API.
 Rien ne passe par un cloud.
 
-Testée contre un vrai Zabbix 7.0 LTS (images Docker officielles, agent 2 et
-éléments trappeur), et pour Zabbix 6.0 et 6.4 d'après les différences
-documentées de leur API. Vos retours sont les bienvenus :
+Testée contre un vrai Zabbix 7.0 LTS et 6.0 LTS (images Docker officielles,
+agent 2 et éléments trappeur) ; Zabbix 5.4 et 6.4 seulement d'après les
+différences documentées de leur API. Vos retours sont les bienvenus :
 [github.com/guim31/gladys-zabbix/issues](https://github.com/guim31/gladys-zabbix/issues).
 
 ## Ce qu'il faut
@@ -125,7 +125,9 @@ Les problèmes déjà présents au démarrage de l'intégration ne sont pas
 annoncés. Un problème qui apparaît ou se résout pendant un redémarrage de
 Gladys ou de l'intégration est annoncé une fois à la lecture suivante. Les
 problèmes supprimés par une maintenance sont écartés, comme dans les tableaux
-de bord de Zabbix.
+de bord de Zabbix : ni comptés ni annoncés tant qu'ils sont supprimés, et pas
+pris pour résolus ; un problème apparu pendant la maintenance est annoncé à sa
+fin.
 
 ### Actions
 
@@ -178,10 +180,10 @@ de bord de Zabbix.
 - « Un problème est résolu » se déclenche aussi quand un problème sort du
   périmètre : hôte retiré des groupes d'hôtes, déclencheur désactivé.
 - Au plus 30 événements de problème par lecture : une panne réseau peut en
-  lever des dizaines d'un coup ; le reste est seulement journalisé.
+  lever des dizaines d'un coup ; le reste suit aux lectures suivantes.
 - Les fonctionnalités d'éléments ne portent que des nombres ; un pourcentage
   s'affiche en niveau de 0 à 100, les autres unités sans unité.
-- Aucun quota sur l'API de Zabbix : chaque lecture envoie quatre à six
+- Aucun quota sur l'API de Zabbix : chaque lecture envoie deux à six
   requêtes.
 
 Sans lien avec Zabbix SIA. Zabbix est une marque de Zabbix SIA.

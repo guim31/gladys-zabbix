@@ -57,6 +57,8 @@ test('the widget: chosen hosts, all clear, many problems, acknowledged mark', as
   const many = status(await content(w)).items;
   assert.equal(many.length, MAX_ROWS);
   assert.equal(many.at(-1).value, '+12');
+  const gone = await content(w, { hosts: ['ext:test-integration:host:999'] });
+  assert.equal(status(gone).items[0].value, '0 hosts', 'a host gone shows nothing, not all');
   w.zabbix.problems = [];
   await w.hub.pollAll();
   const clear = status(await content(w, {}, 'fr')).items;

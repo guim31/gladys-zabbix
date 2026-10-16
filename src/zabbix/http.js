@@ -61,11 +61,16 @@ export function httpRequest(
         response.on('error', reject);
       },
     );
-    request.on('timeout', () => {
+    // `timeout` only covers a silent socket: a whole answer that trickles in
+    // is bounded by this timer too.
+    const timeOut = () => {
       const error = new Error(`Timed out after ${timeoutMs} ms`);
       error.code = 'ETIMEDOUT';
       request.destroy(error);
-    });
+    };
+    const timer = setTimeout(timeOut, timeoutMs);
+    request.on('timeout', timeOut);
+    request.on('close', () => clearTimeout(timer));
     request.on('error', reject);
     request.end(body);
   });

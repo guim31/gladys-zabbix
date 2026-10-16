@@ -42,6 +42,7 @@ test('Zabbix 7.0: version without token, then the token in the Authorization hea
       name: 'Disk failing on NAS',
       severity: 4,
       acknowledged: false,
+      suppressed: false,
       clock: 1792158162,
     },
   );

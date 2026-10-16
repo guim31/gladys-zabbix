@@ -49,7 +49,7 @@ links it from the Configuration screen.
 Every 30 seconds by default, the integration sends a handful of API requests:
 `apiinfo.version` (once an hour, without the token, as Zabbix requires),
 `hostgroup.get` when host groups are configured, `host.get`, `problem.get`
-(suppressed problems left out), `trigger.get` for the hosts of the problems,
+(suppressed problems flagged, left out of the counts), `trigger.get` for the hosts of the problems,
 and `item.get` when item keys are configured. The token goes in the
 `Authorization: Bearer` header from Zabbix 6.4, in the `auth` member of the
 request before. The states of the added devices are sent only when they

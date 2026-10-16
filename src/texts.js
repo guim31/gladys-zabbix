@@ -160,10 +160,10 @@ export const ACTION_TEXT = {
     es: 'El reconocimiento está desactivado en la configuración de la integración.',
   },
   acknowledgeRefused: {
-    en: 'Zabbix refused to acknowledge: the token user needs the right to acknowledge problems.',
-    fr: "Zabbix a refusé l'acquittement : l'utilisateur du jeton doit avoir le droit d'acquitter.",
-    de: 'Zabbix hat das Bestätigen abgelehnt: Der Token-Benutzer braucht das Recht, Probleme zu bestätigen.',
-    es: 'Zabbix rechazó el reconocimiento: el usuario del token necesita el permiso de reconocer problemas.',
+    en: 'Zabbix refused to acknowledge: check that the token user may acknowledge problems.',
+    fr: "Zabbix a refusé l'acquittement : vérifiez que l'utilisateur du jeton peut acquitter.",
+    de: 'Zabbix hat das Bestätigen abgelehnt: Prüfe, ob der Token-Benutzer Probleme bestätigen darf.',
+    es: 'Zabbix rechazó el reconocimiento: compruebe que el usuario del token puede reconocer problemas.',
   },
   defaultMessage: {
     en: 'Acknowledged from Gladys',

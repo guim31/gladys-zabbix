@@ -28,8 +28,8 @@ function assertReadable(hub) {
   if (!hub.client) {
     throw new Error(pick(ACTION_TEXT.noServer, language));
   }
-  if (hub.error) {
-    throw new Error(pick(ERROR_TEXT[hub.error.kind], language));
+  if (hub.error || !hub.data) {
+    throw new Error(pick(ERROR_TEXT[hub.error?.kind ?? ERROR_KINDS.UNREACHABLE], language));
   }
 }
 
@@ -70,7 +70,7 @@ export const SCENE_ACTIONS = {
       throw new Error(pick(ERROR_TEXT[err.kind] ?? ERROR_TEXT.http, language), { cause: err });
     }
     logger.info(`${pending.length} problem(s) of ${host.name} acknowledged`);
-    await hub.pollAll();
+    await hub.pollAll({ fresh: true });
     return { acknowledged: pending.length };
   },
 

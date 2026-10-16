@@ -11,8 +11,8 @@ panel enumera los problemas en curso.
 La integración lee la API de Zabbix en su red local, con un token de API.
 Nada pasa por una nube.
 
-Probada con un Zabbix 7.0 LTS real (imágenes Docker oficiales, agente 2 y
-elementos trapper), y para Zabbix 6.0 y 6.4 según las diferencias
+Probada con un Zabbix 7.0 LTS y 6.0 LTS reales (imágenes Docker oficiales,
+agente 2 y elementos trapper); Zabbix 5.4 y 6.4 solo según las diferencias
 documentadas de su API. Sus comentarios son bienvenidos:
 [github.com/guim31/gladys-zabbix/issues](https://github.com/guim31/gladys-zabbix/issues).
 
@@ -123,7 +123,9 @@ Los problemas ya presentes al arrancar la integración no se anuncian. Un
 problema que empieza o termina durante un reinicio de Gladys o de la
 integración se anuncia una vez en la lectura siguiente. Los problemas
 suprimidos por un mantenimiento se dejan fuera, como en los paneles de
-Zabbix.
+Zabbix: ni se cuentan ni se anuncian mientras están suprimidos, y no se toman
+por resueltos; un problema surgido durante el mantenimiento se anuncia al
+terminar este.
 
 ### Acciones
 
@@ -175,10 +177,10 @@ Zabbix.
 - «Se resuelve un problema» también se activa cuando un problema sale del
   alcance: un host retirado de los grupos de hosts, un disparador desactivado.
 - Como máximo 30 eventos de problema por lectura: un corte de red puede
-  provocar decenas a la vez; el resto solo se registra.
+  provocar decenas a la vez; el resto sigue en las lecturas siguientes.
 - Las funciones de elementos solo contienen números; un porcentaje se muestra
   como nivel de 0 a 100, las demás unidades sin unidad.
-- Sin cuota en la API de Zabbix: cada lectura envía de cuatro a seis
+- Sin cuota en la API de Zabbix: cada lectura envía de dos a seis
   peticiones.
 
 Sin relación con Zabbix SIA. Zabbix es una marca de Zabbix SIA.

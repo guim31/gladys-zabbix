@@ -10,9 +10,9 @@ host, and a dashboard widget lists the problems in progress.
 The integration reads the Zabbix API on your local network, with an API
 token. Nothing goes through a cloud.
 
-Tested against a real Zabbix 7.0 LTS (official Docker images, agent 2 and
-trapper items), and on Zabbix 6.0 and 6.4 through their documented API
-differences. Feedback welcome:
+Tested against a real Zabbix 7.0 LTS and 6.0 LTS (official Docker images,
+agent 2 and trapper items); Zabbix 5.4 and 6.4 only through their documented
+API differences. Feedback welcome:
 [github.com/guim31/gladys-zabbix/issues](https://github.com/guim31/gladys-zabbix/issues).
 
 ## What you need
@@ -113,7 +113,9 @@ its settings, choose hosts to show only theirs (empty: every host).
 The problems already there when the integration starts are not announced. A
 problem that starts or ends while Gladys or the integration restarts is
 announced once at the next read. Problems suppressed by a maintenance are left
-out, as in the Zabbix dashboards.
+out, as in the Zabbix dashboards: neither counted nor announced while
+suppressed, and not taken for resolved; one that started during the
+maintenance is announced when it ends.
 
 ### Actions
 
@@ -163,9 +165,9 @@ out, as in the Zabbix dashboards.
 - "A problem is resolved" also fires when a problem leaves the scope: a host
   removed from the host groups, a trigger disabled.
 - At most 30 problem events per read: a network outage can raise dozens at
-  once; the rest is only logged.
+  once; the rest follows at the next reads.
 - Item features hold numbers only; a percentage shows as a level from 0 to
   100, other units without unit.
-- No quota on the Zabbix API: each read sends four to six requests.
+- No quota on the Zabbix API: each read sends two to six requests.
 
 Not affiliated with Zabbix SIA. Zabbix is a trademark of Zabbix SIA.

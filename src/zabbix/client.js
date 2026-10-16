@@ -147,7 +147,11 @@ export class ZabbixClient {
       if (TLS_CODES.has(err.code)) {
         throw new ZabbixError(ERROR_KINDS.TLS, `Certificate refused (${err.code})`);
       }
-      throw new ZabbixError(ERROR_KINDS.UNREACHABLE, err.code ? `${err.code}` : err.message);
+      if (!err.code) {
+        // The server answers, but not as expected (an answer too large…).
+        throw new ZabbixError(ERROR_KINDS.HTTP, err.message);
+      }
+      throw new ZabbixError(ERROR_KINDS.UNREACHABLE, `${err.code}`);
     }
 
     const { status } = response;
@@ -246,13 +250,13 @@ export class ZabbixClient {
     }));
     const hostIds = new Set(hosts.map((host) => host.id));
 
-    // Suppressed problems (a maintenance that hides them) are left out, as the
-    // Zabbix dashboards do by default.
+    // Suppressed problems (a maintenance that hides them) are read too, with
+    // their flag: the hub leaves them out of the counts, as the Zabbix
+    // dashboards do, but must not take them for resolved.
     const rawProblems = await this.call('problem.get', {
-      output: ['eventid', 'objectid', 'name', 'severity', 'acknowledged', 'clock'],
+      output: ['eventid', 'objectid', 'name', 'severity', 'acknowledged', 'clock', 'suppressed'],
       source: 0,
       object: 0,
-      suppressed: false,
       sortfield: ['eventid'],
       sortorder: 'DESC',
       ...filter,
@@ -284,6 +288,7 @@ export class ZabbixClient {
             name: problem.name,
             severity: Math.min(5, Math.max(0, Number(problem.severity) || 0)),
             acknowledged: String(problem.acknowledged) === '1',
+            suppressed: String(problem.suppressed) === '1',
             clock: Number(problem.clock) || 0,
           },
         ];
