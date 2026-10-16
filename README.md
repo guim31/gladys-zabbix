@@ -60,12 +60,14 @@ a restart neither repeats nor misses one.
 ## Checked on a real Zabbix
 
 On 16/10/2026, the Docker image of the integration ran with the constraints
-of the Gladys sandbox (read-only rootfs, no capability, 256 MB) against
-Zabbix 7.0.31 (official Docker images, PostgreSQL), with a Zabbix agent 2
-host and a trapper host fed by `zabbix_sender`: discovery, problems raised
-and resolved, acknowledgement, refused token, Zabbix stopped. The answers are
-kept as fixtures in [`test/fixtures/zabbix`](test/fixtures/zabbix). Zabbix
-6.0 and 6.4 are covered by tests of their documented API differences.
+of the Gladys sandbox (read-only rootfs, no capability, 256 MB, about 20 MB
+used at rest) against Zabbix 7.0.31 and 6.0.48 (official Docker images,
+PostgreSQL), with a Zabbix agent 2 host, a host whose agent refuses the
+server, and a trapper host fed by `zabbix_sender`: discovery, problems
+raised and resolved, scene events, acknowledgement, widget, refused token,
+wrong address, Zabbix stopped. The 7.0 answers are kept as fixtures in
+[`test/fixtures/zabbix`](test/fixtures/zabbix). Zabbix 5.4 and 6.4 are only
+covered by tests of their documented API differences.
 
 ## Limitations
 
