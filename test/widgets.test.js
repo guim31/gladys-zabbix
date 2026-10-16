@@ -1,77 +1,79 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateWidgetContent } from '@gladysassistant/integration-sdk';
-import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
-import { buildDiscoveredDevices } from '../src/devices/index.js';
-import { simulateLanSession } from '../src/devices/plug.js';
-import { DEMO_STATUS_WIDGET, WIDGETS, refreshWidgets } from '../src/widgets.js';
-import { normalizeConfig } from '../src/config.js';
+import { MAX_ROWS } from '../src/widgets.js';
+import { createWorld, hostDevice } from './helpers/world.js';
 
-const gladys = createFakeGladys();
-const config = normalizeConfig();
-const demoStatus = WIDGETS[DEMO_STATUS_WIDGET];
+async function world(t, options) {
+  const created = await createWorld(options);
+  t.after(() => created.app.stop());
+  return created;
+}
 
-// What the SDK passes to onWidgetGet, plus the config index.js adds.
-const getContent = (cfg = config) =>
-  demoStatus.get(gladys, { settings: {}, language: 'en', units: 'metric', config: cfg });
+async function content(w, settings = {}, language = 'en') {
+  const ack = await w.fake.widgetGet('problems', { settings, language });
+  assert.equal(ack.success, true, ack.error);
+  assert.deepEqual(validateWidgetContent(ack.data.content), [], 'within the core budget');
+  return ack.data.content;
+}
 
-test('the demo_status content is rendered exactly as sent', async () => {
-  // [] = nothing the core would drop, truncate or trim to the content budget.
-  assert.deepEqual(validateWidgetContent(await getContent()), []);
-});
+const status = (body) => body.components.find((component) => component.type === 'status');
 
-test('the degraded plug connection content is valid too', async () => {
-  simulateLanSession(false);
-  try {
-    const content = await getContent();
-    assert.deepEqual(validateWidgetContent(content), []);
-    const status = content.components.find((component) => component.type === 'status');
-    assert.ok(
-      status.items.some((item) => item.color === 'warning'),
-      'degraded shows a warning',
-    );
-  } finally {
-    simulateLanSession(true);
-  }
-});
-
-test('the live tiles reference features the integration publishes', async () => {
-  const featureIds = new Set(
-    buildDiscoveredDevices(gladys, config).flatMap((device) =>
-      device.features.map((feature) => feature.external_id),
-    ),
+test('the widget: tiles, the most severe problem first, a Refresh button', async (t) => {
+  const w = await world(t);
+  const body = await content(w);
+  const values = body.components.filter((component) => component.type === 'value');
+  assert.deepEqual(
+    values.map((value) => [value.label, value.value, value.color]),
+    [
+      ['Problems', 6, 'danger'],
+      ['Not acknowledged', 6, 'warning'],
+      ['Hosts unavailable', 0, 'neutral'],
+    ],
   );
-  const liveTiles = (await getContent()).components.filter((c) => c.device_feature);
-  assert.ok(liveTiles.length > 0, 'the template demonstrates a device-bound tile');
-  for (const tile of liveTiles) {
-    assert.ok(featureIds.has(tile.device_feature), `unknown feature ${tile.device_feature}`);
-  }
+  const rows = status(body).items;
+  assert.deepEqual(rows[0], {
+    label: 'Disk failing on NAS',
+    value: 'NAS',
+    icon: 'alert-octagon',
+    color: 'danger',
+  });
+  assert.ok(rows.every((row) => row.label.length <= 40 && row.value.length <= 40));
+  assert.equal(body.components.at(-1).action.key, 'refresh');
 });
 
-test('every button action of the content is handled and answers a short toast', async () => {
-  const buttons = (await getContent()).components.filter((c) => c.type === 'button' && c.action);
-  assert.ok(buttons.length > 0, 'the template demonstrates a widget action');
-  for (const { action } of buttons) {
-    const message = await demoStatus.action(gladys, {
-      actionKey: action.key,
-      params: action.params ?? {},
-      settings: {},
-      config,
-    });
-    assert.ok(message.en, 'the toast carries at least the mandatory `en` text');
-    assert.ok(message.en.length <= 200, 'toasts are capped at 200 characters');
-  }
-});
-
-test('an unknown widget action fails, so the user sees the error', async () => {
-  await assert.rejects(
-    demoStatus.action(gladys, { actionKey: 'unknown', params: {}, settings: {}, config }),
-    /Unknown widget action/,
+test('the widget: chosen hosts, all clear, many problems, acknowledged mark', async (t) => {
+  const w = await world(t);
+  await w.fake.sceneAction('acknowledge_host_problems', { device: hostDevice(w.gladys, '10684') });
+  const nas = await content(w, { hosts: [hostDevice(w.gladys, '10684')] });
+  assert.deepEqual(
+    status(nas).items.map((row) => row.value),
+    ['NAS ✓', 'NAS ✓'],
   );
+  for (let index = 0; index < 15; index += 1) {
+    w.zabbix.raise({ name: `Problem ${index}` });
+  }
+  await w.hub.pollAll();
+  const many = status(await content(w)).items;
+  assert.equal(many.length, MAX_ROWS);
+  assert.equal(many.at(-1).value, '+12');
+  w.zabbix.problems = [];
+  await w.hub.pollAll();
+  const clear = status(await content(w, {}, 'fr')).items;
+  assert.deepEqual(clear, [
+    { label: 'Aucun problème', value: '2 hôtes', icon: 'check-circle', color: 'success' },
+  ]);
 });
 
-test('refreshWidgets nudges every widget', () => {
-  const fresh = createFakeGladys();
-  refreshWidgets(fresh);
-  assert.deepEqual(fresh.fake.widgetRefreshes, Object.keys(WIDGETS));
+test('the widget says what is wrong: not configured, Zabbix silent', async (t) => {
+  const empty = await world(t, { config: {} });
+  assert.match((await content(empty)).components[0].text, /Enter the address/);
+
+  const w = await world(t);
+  w.zabbix.failure = 'down';
+  await w.hub.pollAll();
+  const body = await content(w);
+  assert.ok(body.components.some((component) => /does not answer/.test(component.text ?? '')));
+  const refresh = await w.fake.widgetAction('problems', 'refresh', {});
+  assert.equal(refresh.success, true);
 });

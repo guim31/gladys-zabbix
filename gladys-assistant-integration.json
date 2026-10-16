@@ -1,177 +1,867 @@
 {
   "manifest_version": 1,
   "type": "device",
-  "name": "Demo Devices Template",
+  "name": "Zabbix",
   "description": {
-    "en": "Starter template showing sensors, a switch, a dimmable light and a smart plug.",
-    "fr": "Template de démarrage : capteurs, interrupteur, lampe variable et prise connectée."
+    "en": "Your Zabbix hosts and problems in Gladys, and scenes when a problem starts or ends.",
+    "fr": "Vos hôtes et problèmes Zabbix dans Gladys, et des scènes quand un problème naît ou se résout.",
+    "de": "Deine Zabbix-Hosts und -Probleme in Gladys, mit Szenen, wenn ein Problem beginnt oder endet.",
+    "es": "Sus hosts y problemas de Zabbix en Gladys, y escenas cuando un problema empieza o termina."
   },
   "version": "1.0.0",
-  "docker_image": "ghcr.io/gladysassistant/integration-template-js:1.0.0",
+  "docker_image": "ghcr.io/guim31/gladys-zabbix:1.0.0",
   "gladys_version": ">=5.1.0",
-  "cover_image": "https://raw.githubusercontent.com/GladysAssistant/integration-template-js/master/cover.png",
-  "categories": ["lighting", "security", "environment"],
-  "transports": ["local", "cloud"],
+  "cover_image": "https://raw.githubusercontent.com/guim31/gladys-zabbix/main/cover.png",
+  "categories": ["network"],
+  "transports": ["local"],
   "config_schema": [
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Getting started", "fr": "Pour commencer" },
+      "label": {
+        "en": "Your Zabbix server",
+        "fr": "Votre serveur Zabbix",
+        "de": "Dein Zabbix-Server",
+        "es": "Su servidor Zabbix"
+      },
       "description": {
-        "en": "The demo weather station reads real data from the free Open-Meteo API: pick the coordinates to observe. No account, no API key.",
-        "fr": "La station météo de démonstration lit de vraies données via l'API gratuite Open-Meteo : choisissez les coordonnées à observer. Pas de compte, pas de clé d'API."
+        "en": "In Zabbix (5.4+), open Users → API tokens (Administration → General before 6.4), create a token and paste it below with the address of Zabbix. Then add the hosts to follow from the Discover tab: the scene triggers work for every host, added or not.",
+        "fr": "Dans Zabbix (5.4+), ouvrez Utilisateurs → Jetons API (Administration → Général avant la 6.4), créez un jeton et collez-le ci-dessous avec l'adresse de Zabbix. Ajoutez ensuite les hôtes à suivre depuis l'onglet Découverte : les déclencheurs de scène valent pour tous les hôtes, ajoutés ou non.",
+        "de": "Öffne in Zabbix (5.4+) Benutzer → API-Token (vor 6.4: Administration → Allgemein), erstelle ein Token und füge es unten mit der Adresse von Zabbix ein. Lege dann die Hosts, denen du folgen willst, im Tab „Entdecken“ an: Die Szenen-Auslöser gelten für alle Hosts, angelegt oder nicht.",
+        "es": "En Zabbix (5.4+), abra Usuarios → Tokens de API (Administración → General antes de la 6.4), cree un token y péguelo abajo con la dirección de Zabbix. Después, añada los hosts que quiera seguir desde la pestaña Descubrir: los disparadores de escena valen para todos los hosts, añadidos o no."
       },
       "links": [
         {
-          "url": "https://open-meteo.com/en/docs",
-          "label": { "en": "Open-Meteo documentation", "fr": "Documentation Open-Meteo" }
+          "url": "https://github.com/guim31/gladys-zabbix/blob/main/docs/en.md",
+          "label": {
+            "en": "Setup guide",
+            "fr": "Guide d'installation",
+            "de": "Installationsanleitung",
+            "es": "Guía de instalación"
+          }
+        },
+        {
+          "url": "https://www.zabbix.com/documentation/current/en/manual/web_interface/frontend_sections/users/api_tokens",
+          "label": {
+            "en": "Zabbix API tokens",
+            "fr": "Jetons d'API de Zabbix",
+            "de": "API-Token von Zabbix",
+            "es": "Tokens de API de Zabbix"
+          }
         }
       ]
     },
     {
-      "key": "latitude",
-      "type": "number",
-      "label": { "en": "Latitude", "fr": "Latitude" },
-      "description": {
-        "en": "Latitude used for the demo weather sensor.",
-        "fr": "Latitude utilisée par le capteur météo de démonstration."
+      "key": "zabbix_url",
+      "type": "string",
+      "label": {
+        "en": "Zabbix address",
+        "fr": "Adresse de Zabbix",
+        "de": "Adresse von Zabbix",
+        "es": "Dirección de Zabbix"
       },
-      "placeholder": { "en": "e.g. 48.8566", "fr": "ex. 48.8566" },
-      "required": true,
-      "default": 48.8566,
-      "min": -90,
-      "max": 90
+      "description": {
+        "en": "The address you open the Zabbix frontend with; the API is found next to it.",
+        "fr": "L'adresse avec laquelle vous ouvrez l'interface de Zabbix ; l'API se trouve à côté.",
+        "de": "Die Adresse, mit der du die Oberfläche von Zabbix öffnest; die API liegt daneben.",
+        "es": "La dirección con la que abre la interfaz de Zabbix; la API está al lado."
+      },
+      "placeholder": {
+        "en": "e.g. http://192.168.1.2/zabbix",
+        "fr": "ex. http://192.168.1.2/zabbix",
+        "de": "z. B. http://192.168.1.2/zabbix",
+        "es": "p. ej. http://192.168.1.2/zabbix"
+      },
+      "required": true
     },
     {
-      "key": "longitude",
-      "type": "number",
-      "label": { "en": "Longitude", "fr": "Longitude" },
-      "description": {
-        "en": "Longitude used for the demo weather sensor.",
-        "fr": "Longitude utilisée par le capteur météo de démonstration."
+      "key": "api_token",
+      "type": "secret",
+      "label": {
+        "en": "API token",
+        "fr": "Jeton d'API",
+        "de": "API-Token",
+        "es": "Token de API"
       },
-      "placeholder": { "en": "e.g. 2.3522", "fr": "ex. 2.3522" },
-      "required": true,
-      "default": 2.3522,
-      "min": -180,
-      "max": 180
+      "description": {
+        "en": "A read-only user is enough, plus the right to acknowledge problems for the scene action.",
+        "fr": "Un utilisateur en lecture seule suffit, avec le droit d'acquitter les problèmes pour l'action de scène.",
+        "de": "Ein Benutzer mit Lesezugriff genügt, dazu das Recht, Probleme zu bestätigen, für die Szenen-Aktion.",
+        "es": "Basta un usuario de solo lectura, con el permiso de reconocer problemas para la acción de escena."
+      },
+      "required": true
     },
     {
-      "key": "unit",
+      "key": "host_groups",
+      "type": "string",
+      "label": {
+        "en": "Host groups (optional)",
+        "fr": "Groupes d'hôtes (facultatif)",
+        "de": "Hostgruppen (optional)",
+        "es": "Grupos de hosts (opcional)"
+      },
+      "description": {
+        "en": "Names separated by commas. Empty: every monitored host the token can see.",
+        "fr": "Noms séparés par des virgules. Vide : tous les hôtes supervisés que le jeton voit.",
+        "de": "Namen durch Kommas getrennt. Leer: alle überwachten Hosts, die das Token sieht.",
+        "es": "Nombres separados por comas. Vacío: todos los hosts supervisados que ve el token."
+      },
+      "placeholder": {
+        "en": "e.g. Homelab, Linux servers",
+        "fr": "ex. Homelab, Linux servers",
+        "de": "z. B. Homelab, Linux servers",
+        "es": "p. ej. Homelab, Linux servers"
+      },
+      "required": false
+    },
+    {
+      "key": "item_keys",
+      "type": "string",
+      "label": {
+        "en": "Item keys (optional)",
+        "fr": "Clés d'éléments (facultatif)",
+        "de": "Item-Schlüssel (optional)",
+        "es": "Claves de elementos (opcional)"
+      },
+      "description": {
+        "en": "Up to 5 numeric item keys, separated by commas, added to each host that has them.",
+        "fr": "Jusqu'à 5 clés d'éléments numériques, séparées par des virgules, ajoutées à chaque hôte qui les a.",
+        "de": "Bis zu 5 numerische Item-Schlüssel, durch Kommas getrennt, bei jedem Host, der sie hat.",
+        "es": "Hasta 5 claves de elementos numéricos, separadas por comas, añadidas a cada host que las tenga."
+      },
+      "placeholder": {
+        "en": "e.g. system.cpu.util, vm.memory.utilization",
+        "fr": "ex. system.cpu.util, vm.memory.utilization",
+        "de": "z. B. system.cpu.util, vm.memory.utilization",
+        "es": "p. ej. system.cpu.util, vm.memory.utilization"
+      },
+      "required": false
+    },
+    {
+      "key": "options",
+      "type": "section",
+      "label": {
+        "en": "Options",
+        "fr": "Options",
+        "de": "Optionen",
+        "es": "Opciones"
+      }
+    },
+    {
+      "key": "poll_interval",
       "type": "select",
-      "label": { "en": "Temperature unit", "fr": "Unité de température" },
+      "label": {
+        "en": "Refresh interval",
+        "fr": "Intervalle de rafraîchissement",
+        "de": "Aktualisierungsintervall",
+        "es": "Intervalo de actualización"
+      },
+      "description": {
+        "en": "How often Zabbix is read: a handful of API requests each time.",
+        "fr": "Fréquence de lecture de Zabbix : quelques requêtes d'API à chaque fois.",
+        "de": "Wie oft Zabbix gelesen wird: jedes Mal eine Handvoll API-Anfragen.",
+        "es": "Con qué frecuencia se lee Zabbix: unas pocas peticiones de API cada vez."
+      },
       "required": false,
-      "default": "celsius",
+      "default": "30",
       "options": [
-        { "value": "celsius", "label": { "en": "Celsius", "fr": "Celsius" } },
-        { "value": "fahrenheit", "label": { "en": "Fahrenheit", "fr": "Fahrenheit" } }
+        {
+          "value": "15",
+          "label": {
+            "en": "15 seconds",
+            "fr": "15 secondes",
+            "de": "15 Sekunden",
+            "es": "15 segundos"
+          }
+        },
+        {
+          "value": "30",
+          "label": {
+            "en": "30 seconds",
+            "fr": "30 secondes",
+            "de": "30 Sekunden",
+            "es": "30 segundos"
+          }
+        },
+        {
+          "value": "60",
+          "label": {
+            "en": "1 minute",
+            "fr": "1 minute",
+            "de": "1 Minute",
+            "es": "1 minuto"
+          }
+        },
+        {
+          "value": "120",
+          "label": {
+            "en": "2 minutes",
+            "fr": "2 minutes",
+            "de": "2 Minuten",
+            "es": "2 minutos"
+          }
+        },
+        {
+          "value": "300",
+          "label": {
+            "en": "5 minutes",
+            "fr": "5 minutes",
+            "de": "5 Minuten",
+            "es": "5 minutos"
+          }
+        }
       ]
     },
     {
-      "key": "poll_frequency",
-      "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
+      "key": "allow_acknowledge",
+      "type": "boolean",
+      "label": {
+        "en": "Allow acknowledging from scenes",
+        "fr": "Autoriser l'acquittement depuis les scènes",
+        "de": "Bestätigen aus Szenen erlauben",
+        "es": "Permitir reconocer desde escenas"
+      },
       "description": {
-        "en": "How often sensors are polled, in seconds (one minute minimum).",
-        "fr": "Fréquence d'interrogation des capteurs, en secondes (une minute minimum)."
+        "en": "Untick to turn off the \"Acknowledge the problems of a host\" scene action.",
+        "fr": "Décochez pour désactiver l'action de scène « Acquitter les problèmes d'un hôte ».",
+        "de": "Deaktiviere es, um die Szenen-Aktion „Probleme eines Hosts bestätigen“ auszuschalten.",
+        "es": "Desmarque para desactivar la acción de escena «Reconocer los problemas de un host»."
       },
       "required": false,
-      "default": 300,
-      "min": 60,
-      "max": 3600
+      "default": true
+    },
+    {
+      "key": "allow_self_signed",
+      "type": "boolean",
+      "label": {
+        "en": "Accept self-signed certificates",
+        "fr": "Accepter les certificats auto-signés",
+        "de": "Selbstsignierte Zertifikate akzeptieren",
+        "es": "Aceptar certificados autofirmados"
+      },
+      "description": {
+        "en": "Only for an https:// address whose certificate your browser does not trust either.",
+        "fr": "Seulement pour une adresse en https:// dont le certificat n'est pas reconnu par votre navigateur non plus.",
+        "de": "Nur für eine https://-Adresse, deren Zertifikat auch dein Browser nicht anerkennt.",
+        "es": "Solo para una dirección https:// cuyo certificado tampoco reconoce su navegador."
+      },
+      "required": false,
+      "default": false
+    },
+    {
+      "key": "language",
+      "type": "select",
+      "label": {
+        "en": "Language of the names",
+        "fr": "Langue des noms",
+        "de": "Sprache der Namen",
+        "es": "Idioma de los nombres"
+      },
+      "description": {
+        "en": "Language of the feature names (set when a device is added) and of the scene results.",
+        "fr": "Langue des noms des fonctionnalités (fixés à l'ajout d'un appareil) et des résultats de scène.",
+        "de": "Sprache der Funktionsnamen (beim Hinzufügen eines Geräts festgelegt) und der Szenen-Ergebnisse.",
+        "es": "Idioma de los nombres de las funciones (fijados al añadir un dispositivo) y de los resultados de escena."
+      },
+      "required": false,
+      "default": "fr",
+      "options": [
+        {
+          "value": "en",
+          "label": {
+            "en": "English",
+            "fr": "Anglais",
+            "de": "Englisch",
+            "es": "Inglés"
+          }
+        },
+        {
+          "value": "fr",
+          "label": {
+            "en": "French",
+            "fr": "Français",
+            "de": "Französisch",
+            "es": "Francés"
+          }
+        },
+        {
+          "value": "de",
+          "label": {
+            "en": "German",
+            "fr": "Allemand",
+            "de": "Deutsch",
+            "es": "Alemán"
+          }
+        },
+        {
+          "value": "es",
+          "label": {
+            "en": "Spanish",
+            "fr": "Espagnol",
+            "de": "Spanisch",
+            "es": "Español"
+          }
+        }
+      ]
     }
   ],
   "actions": [
     {
-      "key": "test_weather",
-      "label": { "en": "Test the weather provider", "fr": "Tester le fournisseur météo" },
+      "key": "test_connection",
+      "label": {
+        "en": "Test the connection",
+        "fr": "Tester la connexion",
+        "de": "Verbindung testen",
+        "es": "Probar la conexión"
+      },
       "timeout_seconds": 30
-    },
-    {
-      "key": "identify",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ]
     }
   ],
   "scene_triggers": [
     {
-      "key": "motion_detected",
-      "label": { "en": "Motion detected", "fr": "Mouvement détecté" },
+      "key": "problem_started",
+      "label": {
+        "en": "A problem starts",
+        "fr": "Un problème apparaît",
+        "de": "Ein Problem beginnt",
+        "es": "Empieza un problema"
+      },
       "description": {
-        "en": "A demo motion sensor saw a person or an animal move.",
-        "fr": "Un détecteur de démonstration a vu bouger une personne ou un animal."
+        "en": "A new Zabbix problem on a host (suppressed problems left out).",
+        "fr": "Un nouveau problème Zabbix sur un hôte (hors problèmes supprimés).",
+        "de": "Ein neues Zabbix-Problem auf einem Host (unterdrückte Probleme ausgenommen).",
+        "es": "Un nuevo problema de Zabbix en un host (sin los problemas suprimidos)."
       },
       "fields": [
         {
           "key": "device",
-          "type": "select",
+          "type": "multi_select",
           "source": "devices",
-          "label": { "en": "Sensor", "fr": "Détecteur" }
+          "label": {
+            "en": "Hosts (empty: any)",
+            "fr": "Hôtes (vide : n'importe lequel)",
+            "de": "Hosts (leer: beliebig)",
+            "es": "Hosts (vacío: cualquiera)"
+          },
+          "description": {
+            "en": "Only the devices added to Gladys can be chosen; empty works for every host.",
+            "fr": "Seuls les appareils ajoutés à Gladys se choisissent ; vide vaut pour tous les hôtes.",
+            "de": "Nur die in Gladys angelegten Geräte sind wählbar; leer gilt für alle Hosts.",
+            "es": "Solo se pueden elegir los dispositivos añadidos a Gladys; vacío vale para todos los hosts."
+          }
         },
         {
-          "key": "target",
+          "key": "severity",
           "type": "multi_select",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" },
+          "label": {
+            "en": "Severities (empty: any)",
+            "fr": "Sévérités (vide : n'importe laquelle)",
+            "de": "Schweregrade (leer: beliebig)",
+            "es": "Gravedades (vacío: cualquiera)"
+          },
+          "description": {
+            "en": "For \"High or above\", choose High and Disaster.",
+            "fr": "Pour « Haut ou plus », choisissez Haut et Désastre.",
+            "de": "Für „Hoch oder mehr“ wähle Hoch und Katastrophe.",
+            "es": "Para «Alta o más», elija Alta y Desastre."
+          },
           "options": [
-            { "value": "person", "label": { "en": "Person", "fr": "Personne" } },
-            { "value": "animal", "label": { "en": "Animal", "fr": "Animal" } }
+            {
+              "value": "0",
+              "label": {
+                "en": "Not classified",
+                "fr": "Non classé",
+                "de": "Nicht klassifiziert",
+                "es": "No clasificado"
+              }
+            },
+            {
+              "value": "1",
+              "label": {
+                "en": "Information",
+                "fr": "Information",
+                "de": "Information",
+                "es": "Información"
+              }
+            },
+            {
+              "value": "2",
+              "label": {
+                "en": "Warning",
+                "fr": "Avertissement",
+                "de": "Warnung",
+                "es": "Advertencia"
+              }
+            },
+            {
+              "value": "3",
+              "label": {
+                "en": "Average",
+                "fr": "Moyen",
+                "de": "Durchschnittlich",
+                "es": "Promedio"
+              }
+            },
+            {
+              "value": "4",
+              "label": {
+                "en": "High",
+                "fr": "Haut",
+                "de": "Hoch",
+                "es": "Alta"
+              }
+            },
+            {
+              "value": "5",
+              "label": {
+                "en": "Disaster",
+                "fr": "Désastre",
+                "de": "Katastrophe",
+                "es": "Desastre"
+              }
+            }
           ]
         }
       ],
       "variables": [
         {
-          "key": "target",
+          "key": "host",
           "type": "string",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" }
+          "label": {
+            "en": "Host name",
+            "fr": "Nom de l'hôte",
+            "de": "Hostname",
+            "es": "Nombre del host"
+          }
+        },
+        {
+          "key": "problem",
+          "type": "string",
+          "label": {
+            "en": "Problem",
+            "fr": "Problème",
+            "de": "Problem",
+            "es": "Problema"
+          }
+        },
+        {
+          "key": "severity_name",
+          "type": "string",
+          "label": {
+            "en": "Severity",
+            "fr": "Sévérité",
+            "de": "Schweregrad",
+            "es": "Gravedad"
+          }
+        },
+        {
+          "key": "severity",
+          "type": "number",
+          "label": {
+            "en": "Severity level (0 to 5)",
+            "fr": "Niveau de sévérité (0 à 5)",
+            "de": "Schweregrad-Stufe (0 bis 5)",
+            "es": "Nivel de gravedad (0 a 5)"
+          }
+        },
+        {
+          "key": "event_id",
+          "type": "string",
+          "label": {
+            "en": "Zabbix event id",
+            "fr": "Identifiant d'événement Zabbix",
+            "de": "Zabbix-Ereignis-ID",
+            "es": "Id. de evento de Zabbix"
+          }
+        }
+      ]
+    },
+    {
+      "key": "problem_resolved",
+      "label": {
+        "en": "A problem is resolved",
+        "fr": "Un problème est résolu",
+        "de": "Ein Problem ist behoben",
+        "es": "Se resuelve un problema"
+      },
+      "description": {
+        "en": "A Zabbix problem is resolved or closed.",
+        "fr": "Un problème Zabbix est résolu ou fermé.",
+        "de": "Ein Zabbix-Problem ist behoben oder geschlossen.",
+        "es": "Un problema de Zabbix se resuelve o se cierra."
+      },
+      "fields": [
+        {
+          "key": "device",
+          "type": "multi_select",
+          "source": "devices",
+          "label": {
+            "en": "Hosts (empty: any)",
+            "fr": "Hôtes (vide : n'importe lequel)",
+            "de": "Hosts (leer: beliebig)",
+            "es": "Hosts (vacío: cualquiera)"
+          },
+          "description": {
+            "en": "Only the devices added to Gladys can be chosen; empty works for every host.",
+            "fr": "Seuls les appareils ajoutés à Gladys se choisissent ; vide vaut pour tous les hôtes.",
+            "de": "Nur die in Gladys angelegten Geräte sind wählbar; leer gilt für alle Hosts.",
+            "es": "Solo se pueden elegir los dispositivos añadidos a Gladys; vacío vale para todos los hosts."
+          }
+        },
+        {
+          "key": "severity",
+          "type": "multi_select",
+          "label": {
+            "en": "Severities (empty: any)",
+            "fr": "Sévérités (vide : n'importe laquelle)",
+            "de": "Schweregrade (leer: beliebig)",
+            "es": "Gravedades (vacío: cualquiera)"
+          },
+          "description": {
+            "en": "For \"High or above\", choose High and Disaster.",
+            "fr": "Pour « Haut ou plus », choisissez Haut et Désastre.",
+            "de": "Für „Hoch oder mehr“ wähle Hoch und Katastrophe.",
+            "es": "Para «Alta o más», elija Alta y Desastre."
+          },
+          "options": [
+            {
+              "value": "0",
+              "label": {
+                "en": "Not classified",
+                "fr": "Non classé",
+                "de": "Nicht klassifiziert",
+                "es": "No clasificado"
+              }
+            },
+            {
+              "value": "1",
+              "label": {
+                "en": "Information",
+                "fr": "Information",
+                "de": "Information",
+                "es": "Información"
+              }
+            },
+            {
+              "value": "2",
+              "label": {
+                "en": "Warning",
+                "fr": "Avertissement",
+                "de": "Warnung",
+                "es": "Advertencia"
+              }
+            },
+            {
+              "value": "3",
+              "label": {
+                "en": "Average",
+                "fr": "Moyen",
+                "de": "Durchschnittlich",
+                "es": "Promedio"
+              }
+            },
+            {
+              "value": "4",
+              "label": {
+                "en": "High",
+                "fr": "Haut",
+                "de": "Hoch",
+                "es": "Alta"
+              }
+            },
+            {
+              "value": "5",
+              "label": {
+                "en": "Disaster",
+                "fr": "Désastre",
+                "de": "Katastrophe",
+                "es": "Desastre"
+              }
+            }
+          ]
+        }
+      ],
+      "variables": [
+        {
+          "key": "host",
+          "type": "string",
+          "label": {
+            "en": "Host name",
+            "fr": "Nom de l'hôte",
+            "de": "Hostname",
+            "es": "Nombre del host"
+          }
+        },
+        {
+          "key": "problem",
+          "type": "string",
+          "label": {
+            "en": "Problem",
+            "fr": "Problème",
+            "de": "Problem",
+            "es": "Problema"
+          }
+        },
+        {
+          "key": "severity_name",
+          "type": "string",
+          "label": {
+            "en": "Severity",
+            "fr": "Sévérité",
+            "de": "Schweregrad",
+            "es": "Gravedad"
+          }
+        },
+        {
+          "key": "severity",
+          "type": "number",
+          "label": {
+            "en": "Severity level (0 to 5)",
+            "fr": "Niveau de sévérité (0 à 5)",
+            "de": "Schweregrad-Stufe (0 bis 5)",
+            "es": "Nivel de gravedad (0 a 5)"
+          }
+        },
+        {
+          "key": "event_id",
+          "type": "string",
+          "label": {
+            "en": "Zabbix event id",
+            "fr": "Identifiant d'événement Zabbix",
+            "de": "Zabbix-Ereignis-ID",
+            "es": "Id. de evento de Zabbix"
+          }
+        },
+        {
+          "key": "duration_minutes",
+          "type": "number",
+          "label": {
+            "en": "Duration (minutes)",
+            "fr": "Durée (minutes)",
+            "de": "Dauer (Minuten)",
+            "es": "Duración (minutos)"
+          }
+        }
+      ]
+    },
+    {
+      "key": "server_unreachable",
+      "label": {
+        "en": "Zabbix no longer answers",
+        "fr": "Zabbix ne répond plus",
+        "de": "Zabbix antwortet nicht mehr",
+        "es": "Zabbix ya no responde"
+      },
+      "description": {
+        "en": "The Zabbix API fails to answer twice in a row.",
+        "fr": "L'API de Zabbix ne répond pas deux fois de suite.",
+        "de": "Die Zabbix-API antwortet zweimal hintereinander nicht.",
+        "es": "La API de Zabbix no responde dos veces seguidas."
+      },
+      "variables": [
+        {
+          "key": "server",
+          "type": "string",
+          "label": {
+            "en": "Zabbix address",
+            "fr": "Adresse de Zabbix",
+            "de": "Adresse von Zabbix",
+            "es": "Dirección de Zabbix"
+          }
+        },
+        {
+          "key": "error",
+          "type": "string",
+          "label": {
+            "en": "Error",
+            "fr": "Erreur",
+            "de": "Fehler",
+            "es": "Error"
+          }
         }
       ]
     }
   ],
   "scene_actions": [
     {
-      "key": "identify_device",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "description": {
-        "en": "Make a device signal itself (the demo light blinks).",
-        "fr": "Fait se signaler un appareil (la lampe de démonstration clignote)."
+      "key": "acknowledge_host_problems",
+      "label": {
+        "en": "Acknowledge the problems of a host",
+        "fr": "Acquitter les problèmes d'un hôte",
+        "de": "Probleme eines Hosts bestätigen",
+        "es": "Reconocer los problemas de un host"
       },
-      "timeout_seconds": 15,
+      "description": {
+        "en": "Acknowledges the active problems of a host in Zabbix, with a message in their history.",
+        "fr": "Acquitte les problèmes actifs d'un hôte dans Zabbix, avec un message dans leur historique.",
+        "de": "Bestätigt die aktiven Probleme eines Hosts in Zabbix, mit einer Nachricht in ihrem Verlauf.",
+        "es": "Reconoce los problemas activos de un host en Zabbix, con un mensaje en su historial."
+      },
+      "timeout_seconds": 30,
       "fields": [
         {
           "key": "device",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
+          "label": {
+            "en": "Host",
+            "fr": "Hôte",
+            "de": "Host",
+            "es": "Host"
+          },
           "required": true
+        },
+        {
+          "key": "message",
+          "type": "string",
+          "label": {
+            "en": "Message (optional)",
+            "fr": "Message (facultatif)",
+            "de": "Nachricht (optional)",
+            "es": "Mensaje (opcional)"
+          },
+          "description": {
+            "en": "Empty: \"Acknowledged from Gladys\".",
+            "fr": "Vide : « Acquitté depuis Gladys ».",
+            "de": "Leer: „In Gladys bestätigt“.",
+            "es": "Vacío: «Reconocido desde Gladys»."
+          },
+          "required": false
         }
       ],
       "outputs": [
         {
-          "key": "signalled",
-          "type": "boolean",
-          "label": { "en": "Device signalled", "fr": "Appareil signalé" }
+          "key": "acknowledged",
+          "type": "number",
+          "label": {
+            "en": "Problems acknowledged",
+            "fr": "Problèmes acquittés",
+            "de": "Bestätigte Probleme",
+            "es": "Problemas reconocidos"
+          }
+        }
+      ]
+    },
+    {
+      "key": "get_problems",
+      "label": {
+        "en": "Read the problems",
+        "fr": "Lire les problèmes",
+        "de": "Probleme lesen",
+        "es": "Leer los problemas"
+      },
+      "description": {
+        "en": "Counts and lists the active problems, of one host or of all, for the next actions.",
+        "fr": "Compte et liste les problèmes actifs, d'un hôte ou de tous, pour les actions suivantes.",
+        "de": "Zählt und listet die aktiven Probleme eines Hosts oder aller für die nächsten Aktionen.",
+        "es": "Cuenta y enumera los problemas activos, de un host o de todos, para las acciones siguientes."
+      },
+      "timeout_seconds": 30,
+      "fields": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Host (empty: all)",
+            "fr": "Hôte (vide : tous)",
+            "de": "Host (leer: alle)",
+            "es": "Host (vacío: todos)"
+          },
+          "required": false
+        }
+      ],
+      "outputs": [
+        {
+          "key": "count",
+          "type": "number",
+          "label": {
+            "en": "Active problems",
+            "fr": "Problèmes actifs",
+            "de": "Aktive Probleme",
+            "es": "Problemas activos"
+          }
+        },
+        {
+          "key": "unacknowledged",
+          "type": "number",
+          "label": {
+            "en": "Not acknowledged",
+            "fr": "Non acquittés",
+            "de": "Unbestätigt",
+            "es": "Sin reconocer"
+          }
+        },
+        {
+          "key": "highest_severity",
+          "type": "string",
+          "label": {
+            "en": "Highest severity",
+            "fr": "Sévérité la plus haute",
+            "de": "Höchster Schweregrad",
+            "es": "Gravedad más alta"
+          }
+        },
+        {
+          "key": "highest_severity_level",
+          "type": "number",
+          "label": {
+            "en": "Highest severity level (-1: none)",
+            "fr": "Niveau de sévérité le plus haut (-1 : aucun)",
+            "de": "Höchste Schweregrad-Stufe (-1: keine)",
+            "es": "Nivel de gravedad más alto (-1: ninguno)"
+          }
+        },
+        {
+          "key": "names",
+          "type": "string",
+          "label": {
+            "en": "Problems (host: problem)",
+            "fr": "Problèmes (hôte : problème)",
+            "de": "Probleme (Host: Problem)",
+            "es": "Problemas (host: problema)"
+          }
         }
       ]
     }
   ],
   "widgets": [
     {
-      "key": "demo_status",
-      "label": { "en": "Demo status", "fr": "État de la démo" },
-      "description": {
-        "en": "Live temperature and plug power, plug connection and observed location.",
-        "fr": "Température et puissance en direct, connexion de la prise, position observée."
+      "key": "problems",
+      "label": {
+        "en": "Zabbix problems",
+        "fr": "Problèmes Zabbix",
+        "de": "Zabbix-Probleme",
+        "es": "Problemas de Zabbix"
       },
-      "icon": "activity",
-      "action_timeout_seconds": 15
+      "description": {
+        "en": "Active problems, the most severe first, and the hosts unavailable.",
+        "fr": "Problèmes en cours, les plus graves d'abord, et hôtes injoignables.",
+        "de": "Aktive Probleme, die schwersten zuerst, und nicht erreichbare Hosts.",
+        "es": "Problemas activos, los más graves primero, y hosts no disponibles."
+      },
+      "icon": "alert-triangle",
+      "action_timeout_seconds": 30,
+      "settings": [
+        {
+          "key": "hosts",
+          "type": "multi_select",
+          "source": "devices",
+          "label": {
+            "en": "Hosts (empty: all)",
+            "fr": "Hôtes (vide : tous)",
+            "de": "Hosts (leer: alle)",
+            "es": "Hosts (vacío: todos)"
+          },
+          "description": {
+            "en": "Only the devices added to Gladys can be chosen.",
+            "fr": "Seuls les appareils ajoutés à Gladys se choisissent.",
+            "de": "Nur die in Gladys angelegten Geräte sind wählbar.",
+            "es": "Solo se pueden elegir los dispositivos añadidos a Gladys."
+          },
+          "required": false
+        }
+      ]
     }
   ]
 }

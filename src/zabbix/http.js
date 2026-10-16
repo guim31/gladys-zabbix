@@ -1,0 +1,72 @@
+// -----------------------------------------------------------------------------
+// The one function that talks to the network: an HTTP(S) POST on node:http /
+// node:https. Not on fetch: fetch cannot accept the self-signed certificate
+// of one server only (a Zabbix frontend at home often has one), node:https
+// can, per request.
+//
+// The client takes this function as a parameter: the tests replace it with an
+// in-memory Zabbix (test/helpers/fakeZabbix.js).
+// (Adapted from guim31/gladys-uptime-kuma.)
+// -----------------------------------------------------------------------------
+
+import http from 'node:http';
+import https from 'node:https';
+
+// problem.get on a busy server weighs a few hundred KB.
+export const MAX_BODY_BYTES = 8 * 1024 * 1024;
+
+/**
+ * @param {string} url absolute URL
+ * @param {object} [options]
+ * @param {string} [options.body] request body (POST)
+ * @param {Record<string, string>} [options.headers]
+ * @param {boolean} [options.insecure] accept a certificate that does not verify (HTTPS only)
+ * @param {number} [options.timeoutMs]
+ * @returns {Promise<{ status: number, headers: Record<string, string>, body: string }>}
+ */
+export function httpRequest(
+  url,
+  { body = '', headers = {}, insecure = false, timeoutMs = 15_000 } = {},
+) {
+  const target = new URL(url);
+  const isHttps = target.protocol === 'https:';
+
+  return new Promise((resolve, reject) => {
+    const request = (isHttps ? https : http).request(
+      target,
+      {
+        method: 'POST',
+        headers: { ...headers, 'Content-Length': Buffer.byteLength(body) },
+        timeout: timeoutMs,
+        ...(isHttps ? { rejectUnauthorized: !insecure } : {}),
+      },
+      (response) => {
+        const chunks = [];
+        let size = 0;
+        response.on('data', (chunk) => {
+          size += chunk.length;
+          if (size > MAX_BODY_BYTES) {
+            request.destroy(new Error('Response too large'));
+            return;
+          }
+          chunks.push(chunk);
+        });
+        response.on('end', () =>
+          resolve({
+            status: response.statusCode ?? 0,
+            headers: response.headers,
+            body: Buffer.concat(chunks).toString('utf8'),
+          }),
+        );
+        response.on('error', reject);
+      },
+    );
+    request.on('timeout', () => {
+      const error = new Error(`Timed out after ${timeoutMs} ms`);
+      error.code = 'ETIMEDOUT';
+      request.destroy(error);
+    });
+    request.on('error', reject);
+    request.end(body);
+  });
+}

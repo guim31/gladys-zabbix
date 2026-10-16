@@ -30,6 +30,23 @@ Gladys before reporting a problem.
 
 In scope: the code of this repository and the Docker image it publishes.
 
+What the integration handles:
+
+- **Secrets**: the Zabbix API token is a `secret` field of the Gladys
+  configuration. The integration reads it from Gladys at startup, keeps it in
+  memory, sends it only to the Zabbix address of the configuration (the
+  `Authorization` header, or the `auth` member of the request before Zabbix
+  6.4), and never writes it to `/data` nor to the logs. A token has the
+  rights of its Zabbix user: a read-only user is enough, plus the right to
+  acknowledge problems for the scene action, which can be turned off.
+- **Stored in `/data`**: `zabbix-state.json`, the problems already seen (event
+  id, host id and name, problem name, severity, start time), so that a restart
+  neither repeats nor misses a scene event. No secret.
+- **Network**: requests go only to the Zabbix address typed in the
+  configuration, in HTTP or HTTPS. HTTPS certificates are verified unless the
+  user ticks "Accept self-signed certificates"; the integration opens no port
+  and calls no cloud service.
+
 Out of scope: Gladys Assistant itself (see its
 [security policy](https://github.com/GladysAssistant/Gladys/security/policy)),
-and the third-party services and devices the integration talks to.
+Zabbix itself, and the hosts it monitors.
