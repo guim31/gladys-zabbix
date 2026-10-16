@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-16
+
 ### Added
 
 - One device per Zabbix host (every monitored host, or the host groups of the
@@ -25,4 +27,5 @@ the notes of the version's GitHub Release.
 - Zabbix 5.4 to 7.x with an API token; feature names, messages and
   documentation in English, French, German and Spanish.
 
-[Unreleased]: https://github.com/guim31/gladys-zabbix/commits/main
+[Unreleased]: https://github.com/guim31/gladys-zabbix/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/guim31/gladys-zabbix/releases/tag/v1.0.0
